@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+
+# uv
+uv.lock
+.python-version
+
+# Environment variables (never commit secrets)
+.env
+
+# Test / coverage artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# pre-commit cache
+.pre-commit-cache/
+
+# macOS
+.DS_Store

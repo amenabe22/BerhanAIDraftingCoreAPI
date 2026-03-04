@@ -1,0 +1,44 @@
+repos:
+  # ---------------------------------------------------------------------------
+  # 1. Standard file hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+        exclude: "^uv\\.lock$"
+      - id: debug-statements       # catches leftover print/breakpoint/pdb
+
+  # ---------------------------------------------------------------------------
+  # 2. Ruff – lint then format (order matters: lint first so format doesn't
+  #    undo a lint fix)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.9
+    hooks:
+      - id: ruff
+        name: ruff lint
+        args: ["--fix", "--exit-non-zero-on-fix"]
+      - id: ruff-format
+        name: ruff format
+
+  # ---------------------------------------------------------------------------
+  # 3. pytest + coverage – run the full test suite before every commit
+  #    Fails the commit if any test fails OR coverage drops below threshold.
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: pytest-cov
+        name: pytest (with coverage)
+        language: system
+        entry: uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=85 -q
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

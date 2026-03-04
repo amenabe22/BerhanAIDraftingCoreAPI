@@ -1,0 +1,50 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Testing / coverage
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.lcov
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# uv lockfile (not needed at runtime)
+uv.lock
+
+# Docker files themselves (no need to COPY)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Logs
+*.log

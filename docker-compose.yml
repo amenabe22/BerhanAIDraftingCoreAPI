@@ -1,0 +1,53 @@
+services:
+  # ── Application ─────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: berhan-advisor-knowledge-agent:latest
+    container_name: berhan-api
+    restart: unless-stopped
+
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+
+    # All secrets come from .env (never baked into the image)
+    env_file:
+      - .env
+
+    # Override individual env vars here if needed (e.g. for local dev)
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    # Resource limits (tune per your host)
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    networks:
+      - berhan-net
+
+networks:
+  berhan-net:
+    driver: bridge

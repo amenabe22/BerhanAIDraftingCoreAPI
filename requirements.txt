@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+langgraph
+langchain-core
+langchain-cohere
+langchain-openai
+langchain-qdrant
+qdrant-client
+pydantic-settings
+
+# Dev / testing
+pytest
+pytest-asyncio
+httpx
