@@ -9,8 +9,10 @@ services:
     container_name: berhan-api
     restart: unless-stopped
 
-    ports:
-      - "${API_HOST_PORT:-8080}:8000"
+    # No host-port binding — nginx reaches the container over the shared network.
+    # Uncomment the line below only for local dev / debugging:
+    # ports:
+    #   - "127.0.0.1:${API_HOST_PORT:-8080}:8000"
 
     # All secrets come from .env (never baked into the image)
     env_file:
@@ -47,7 +49,10 @@ services:
 
     networks:
       - berhan-net
+      - proxy-net          # shared with the nginx/certbot stack
 
 networks:
   berhan-net:
     driver: bridge
+  proxy-net:
+    external: true         # must match the network name in your nginx compose stack
