@@ -363,7 +363,7 @@ async def test_legal_search_injects_legal_agent_system():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             await client.post("/legal-search/stream", json={"message": "q"})
 
-    assert captured["messages"][0].content == LEGAL_AGENT_SYSTEM
+    assert captured["messages"][0].content.startswith(LEGAL_AGENT_SYSTEM)
 
 
 @pytest.mark.asyncio
@@ -386,4 +386,4 @@ async def test_legal_agent_injects_legal_advisor_system():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             await client.post("/legal-agent/stream", json={"message": "q"})
 
-    assert captured["messages"][0].content == LEGAL_ADVISOR_SYSTEM
+    assert captured["messages"][0].content.startswith(LEGAL_ADVISOR_SYSTEM)

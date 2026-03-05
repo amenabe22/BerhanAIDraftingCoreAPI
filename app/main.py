@@ -1,5 +1,6 @@
 import json
 import uuid
+from enum import Enum
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -20,15 +21,43 @@ setup_logging()
 log = get_logger("chat")
 
 
+class Language(str, Enum):
+    amharic = "am"
+    english = "en"
+    oromo = "om"
+
+
+_LANG_INSTRUCTION: dict[Language, str] = {
+    Language.amharic: "Always respond in Amharic (አማርኛ).",
+    Language.english: "Always respond in English.",
+    Language.oromo: "Always respond in Oromo (Afaan Oromoo).",
+}
+
+_LANG_DEFAULT_INSTRUCTION = (
+    "Detect the language of the user's message and always respond in that same language."
+)
+
+
+def _apply_language(system_prompt: str, language: Language | None) -> str:
+    instruction = (
+        _LANG_INSTRUCTION.get(language, _LANG_DEFAULT_INSTRUCTION)
+        if language
+        else _LANG_DEFAULT_INSTRUCTION
+    )
+    return f"{system_prompt}\n\nLANGUAGE: {instruction}"
+
+
 class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
+    language: Language | None = None
 
 
 class DocChatRequest(BaseModel):
     message: str
     doc_id: str
     thread_id: str | None = None
+    language: Language | None = None
 
 
 app = FastAPI(title="Berhan Advisor Knowledge Agent")
@@ -220,7 +249,7 @@ async def legal_search_stream(request: ChatRequest):
     return await _stream_endpoint(
         request,
         event_type="legal_search_request",
-        system_prompt=LEGAL_AGENT_SYSTEM,
+        system_prompt=_apply_language(LEGAL_AGENT_SYSTEM, request.language),
         graph=graph,
     )
 
@@ -236,7 +265,7 @@ async def legal_agent_stream(request: ChatRequest):
     return await _stream_endpoint(
         request,
         event_type="legal_agent_request",
-        system_prompt=LEGAL_ADVISOR_SYSTEM,
+        system_prompt=_apply_language(LEGAL_ADVISOR_SYSTEM, request.language),
         graph=graph,
     )
 
@@ -254,9 +283,11 @@ async def doc_agent_stream(request: DocChatRequest):
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     return await _stream_endpoint(
-        ChatRequest(message=request.message, thread_id=request.thread_id),
+        ChatRequest(
+            message=request.message, thread_id=request.thread_id, language=request.language
+        ),
         event_type="doc_agent_request",
-        system_prompt=DOC_CONSULTANT_SYSTEM,
+        system_prompt=_apply_language(DOC_CONSULTANT_SYSTEM, request.language),
         graph=graph,
         status_message="Searching documents and legal knowledge base…",
     )
