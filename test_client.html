@@ -45,6 +45,352 @@
     .status-bar { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.4rem 0.65rem; background: #fefce8; border: 1px solid #fde047; border-radius: 4px; font-size: 0.8rem; color: #854d0e; }
     .status-bar .spinner { width: 12px; height: 12px; border: 2px solid #fde047; border-top-color: #854d0e; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    /* Language selector */
+    .lang-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+    .lang-row label { margin: 0; font-size: 0.8rem; color: #64748b; white-space: nowrap; }
+    .lang-select { padding: 0.35rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.8rem; background: white; color: #1e293b; cursor: pointer; }
+    .lang-select:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
+  </style>
+</head>
+<body>
+  <h1>Berhan Advisor – API Test</h1>
+
+  <!-- Base URL -->
+  <section>
+    <h2>Base URL</h2>
+    <input type="text" id="baseUrl" value="http://localhost:8000" />
+  </section>
+
+  <!-- Health -->
+  <section>
+    <h2>GET /health</h2>
+    <button type="button" id="healthBtn">Check health</button>
+    <div id="healthResult" class="result" style="display:none;"></div>
+  </section>
+
+  <!-- Legal Search -->
+  <section>
+    <h2>POST /legal-search/stream</h2>
+    <p class="desc">Retrieval-grounded search: synthesized answer with citations. Messages in the same conversation are remembered.</p>
+    <label>Message</label>
+    <textarea id="searchMessage">What are the steps to form a legal contract?</textarea>
+    <div class="lang-row">
+      <label for="searchLang">Response language</label>
+      <select id="searchLang" class="lang-select">
+        <option value="">Auto-detect (mirror input)</option>
+        <option value="am">Amharic – አማርኛ</option>
+        <option value="en">English</option>
+        <option value="om">Oromo – Afaan Oromoo</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
+      <button type="button" id="searchBtn">Send</button>
+      <button type="button" id="searchNewBtn" class="secondary">New conversation</button>
+    </div>
+    <div id="searchThreadBar" class="thread-bar" style="display:none;">
+      <span class="label">Conversation ID</span>
+      <span class="tid" id="searchThreadId"></span>
+      <button type="button" class="secondary" onclick="copyThreadId('searchThreadId')">Copy</button>
+    </div>
+    <div id="searchStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="searchStatusMsg"></span></div>
+    <div id="searchAnswer" class="answer" style="display:none;"></div>
+    <div id="searchCitations" class="citations" style="display:none;"></div>
+  </section>
+
+  <!-- Legal Agent -->
+  <section>
+    <h2>POST /legal-agent/stream</h2>
+    <p class="desc">Legal consultant agent: advisory answers over any legal matter. Messages in the same conversation are remembered.</p>
+    <label>Message</label>
+    <textarea id="agentMessage">I need advice on my contract obligations.</textarea>
+    <div class="lang-row">
+      <label for="agentLang">Response language</label>
+      <select id="agentLang" class="lang-select">
+        <option value="">Auto-detect (mirror input)</option>
+        <option value="am">Amharic – አማርኛ</option>
+        <option value="en">English</option>
+        <option value="om">Oromo – Afaan Oromoo</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
+      <button type="button" id="agentBtn">Send</button>
+      <button type="button" id="agentNewBtn" class="secondary">New conversation</button>
+    </div>
+    <div id="agentThreadBar" class="thread-bar" style="display:none;">
+      <span class="label">Conversation ID</span>
+      <span class="tid" id="agentThreadId"></span>
+      <button type="button" class="secondary" onclick="copyThreadId('agentThreadId')">Copy</button>
+    </div>
+    <div id="agentStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="agentStatusMsg"></span></div>
+    <div id="agentAnswer" class="answer" style="display:none;"></div>
+    <div id="agentCitations" class="citations" style="display:none;"></div>
+  </section>
+
+  <!-- Doc Consultant Agent -->
+  <section>
+    <h2>POST /doc-agent/stream</h2>
+    <p class="desc">Hybrid document + law consultant: understands your uploaded documents <em>and</em> Ethiopian law. Ask about specific clauses, obligations, risks, or anything in your docs. Messages in the same conversation are remembered.</p>
+    <label>Document ID <span style="color:#b91c1c">*</span></label>
+    <input type="text" id="docDocId" placeholder="e.g. 8749c6dc-4bb3-4f5c-b593-ae54d0da5437" />
+    <label>Message</label>
+    <textarea id="docMessage">What are my tax and pension obligations under this employment contract?</textarea>
+    <div class="lang-row">
+      <label for="docLang">Response language</label>
+      <select id="docLang" class="lang-select">
+        <option value="">Auto-detect (mirror input)</option>
+        <option value="am">Amharic – አማርኛ</option>
+        <option value="en">English</option>
+        <option value="om">Oromo – Afaan Oromoo</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
+      <button type="button" id="docBtn">Send</button>
+      <button type="button" id="docNewBtn" class="secondary">New conversation</button>
+    </div>
+    <div id="docThreadBar" class="thread-bar" style="display:none;">
+      <span class="label">Conversation ID</span>
+      <span class="tid" id="docThreadId"></span>
+      <button type="button" class="secondary" onclick="copyThreadId('docThreadId')">Copy</button>
+    </div>
+    <div id="docStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="docStatusMsg"></span></div>
+    <div id="docAnswer" class="answer" style="display:none;"></div>
+    <div id="docCitations" class="citations" style="display:none;"></div>
+  </section>
+
+  <script>
+    marked.setOptions({ gfm: true, breaks: true });
+
+    // Persisted thread IDs — null means start a new conversation on next send
+    const state = { search: null, agent: null, doc: null };
+
+    const baseUrl = () => document.getElementById('baseUrl').value.replace(/\/$/, '');
+
+    const show = (el, text, isError) => {
+      el.style.display = 'block';
+      el.textContent = text;
+      el.className = 'result' + (isError ? ' error' : '');
+    };
+
+    const renderMarkdown = (el, text) => { el.innerHTML = marked.parse(text); };
+
+    function copyThreadId(elId) {
+      const tid = document.getElementById(elId).textContent;
+      navigator.clipboard.writeText(tid).catch(() => {});
+    }
+
+    function setThreadBar(barId, tidElId, threadId) {
+      if (threadId) {
+        document.getElementById(tidElId).textContent = threadId;
+        document.getElementById(barId).style.display = 'flex';
+      } else {
+        document.getElementById(barId).style.display = 'none';
+      }
+    }
+
+    function renderCitations(containerEl, citations) {
+      if (!citations || !citations.length) { containerEl.style.display = 'none'; return; }
+      containerEl.style.display = 'block';
+      containerEl.innerHTML = '<h3>Sources used</h3>' + citations.map(c => {
+        const srcLabel = c.document_id
+          ? (c.document_id + (c.item_id ? ' · Article ' + c.item_id : '') + (c.title ? ' — ' + c.title : ''))
+          : (c.doc_id ? ('Doc ' + c.doc_id.slice(0, 8) + '… · Block ' + (c.block_id || '') + (c.type ? ' [' + c.type + ']' : '')) : '');
+        const preview = c.content || '';
+        return `<div class="citation-card">
+          <div class="source">${srcLabel}</div>
+          ${preview ? '<div class="preview">' + preview.slice(0, 220).replace(/</g, '&lt;') + (preview.length > 220 ? '…' : '') + '</div>' : ''}
+        </div>`;
+      }).join('');
+    }
+
+    document.getElementById('healthBtn').addEventListener('click', async () => {
+      const el = document.getElementById('healthResult');
+      try {
+        const r = await fetch(baseUrl() + '/health');
+        show(el, JSON.stringify(await r.json(), null, 2), !r.ok);
+      } catch (e) { show(el, 'Error: ' + e.message, true); }
+    });
+
+    document.getElementById('searchNewBtn').addEventListener('click', () => {
+      state.search = null;
+      setThreadBar('searchThreadBar', 'searchThreadId', null);
+      document.getElementById('searchAnswer').style.display = 'none';
+      document.getElementById('searchCitations').style.display = 'none';
+    });
+    document.getElementById('agentNewBtn').addEventListener('click', () => {
+      state.agent = null;
+      setThreadBar('agentThreadBar', 'agentThreadId', null);
+      document.getElementById('agentAnswer').style.display = 'none';
+      document.getElementById('agentCitations').style.display = 'none';
+    });
+    document.getElementById('docNewBtn').addEventListener('click', () => {
+      state.doc = null;
+      setThreadBar('docThreadBar', 'docThreadId', null);
+      document.getElementById('docAnswer').style.display = 'none';
+      document.getElementById('docCitations').style.display = 'none';
+    });
+
+    async function streamEndpoint(url, message, stateKey, barId, tidElId, answerEl, citationsEl, btn, statusBarId, statusMsgId, extraBody = {}) {
+      btn.disabled = true;
+      answerEl.style.display = 'block';
+      answerEl.innerHTML = '<span style="color:#94a3b8">…</span>';
+      citationsEl.style.display = 'none';
+      citationsEl.innerHTML = '';
+      document.getElementById(statusBarId).style.display = 'none';
+
+      try {
+        const r = await fetch(baseUrl() + url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, thread_id: state[stateKey] || null, ...extraBody }),
+        });
+        if (!r.ok) {
+          let err = r.status + ' ' + r.statusText;
+          try { const b = await r.json(); if (b.detail) err = b.detail; } catch (_) {}
+          answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + err.replace(/</g, '&lt;') + '</span>';
+          btn.disabled = false;
+          return;
+        }
+
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let full = '';
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+          for (const event of events) {
+            const dataLine = event.split('\n').find(l => l.startsWith('data: '));
+            if (!dataLine) continue;
+            try {
+              const data = JSON.parse(dataLine.slice(6));
+              if (data.type === 'thread_id') {
+                state[stateKey] = data.thread_id;
+                setThreadBar(barId, tidElId, data.thread_id);
+              } else if (data.type === 'status') {
+                const sb = document.getElementById(statusBarId);
+                document.getElementById(statusMsgId).textContent = data.message;
+                sb.style.display = 'flex';
+              } else if (data.type === 'token' && data.content) {
+                document.getElementById(statusBarId).style.display = 'none';
+                full += data.content;
+                renderMarkdown(answerEl, full);
+              } else if (data.type === 'citations') {
+                renderCitations(citationsEl, data.citations);
+              } else if (data.type === 'error') {
+                document.getElementById(statusBarId).style.display = 'none';
+                answerEl.innerHTML += '<p style="color:#b91c1c;margin-top:0.5rem">⚠ ' + (data.message || 'Unknown error').replace(/</g, '&lt;') + '</p>';
+              }
+            } catch (_) {}
+          }
+        }
+        document.getElementById(statusBarId).style.display = 'none';
+        if (!full) answerEl.innerHTML = '<span style="color:#94a3b8">(no response)</span>';
+      } catch (e) {
+        document.getElementById(statusBarId).style.display = 'none';
+        answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + e.message.replace(/</g, '&lt;') + '</span>';
+      }
+      btn.disabled = false;
+    }
+
+    function langExtra(selectId) {
+      const v = document.getElementById(selectId).value;
+      return v ? { language: v } : {};
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', () => {
+      const message = document.getElementById('searchMessage').value.trim();
+      if (!message) return;
+      streamEndpoint('/legal-search/stream', message, 'search',
+        'searchThreadBar', 'searchThreadId',
+        document.getElementById('searchAnswer'),
+        document.getElementById('searchCitations'),
+        document.getElementById('searchBtn'),
+        'searchStatusBar', 'searchStatusMsg',
+        langExtra('searchLang'));
+    });
+
+    document.getElementById('agentBtn').addEventListener('click', () => {
+      const message = document.getElementById('agentMessage').value.trim();
+      if (!message) return;
+      streamEndpoint('/legal-agent/stream', message, 'agent',
+        'agentThreadBar', 'agentThreadId',
+        document.getElementById('agentAnswer'),
+        document.getElementById('agentCitations'),
+        document.getElementById('agentBtn'),
+        'agentStatusBar', 'agentStatusMsg',
+        langExtra('agentLang'));
+    });
+
+    document.getElementById('docBtn').addEventListener('click', () => {
+      const message = document.getElementById('docMessage').value.trim();
+      const docId = document.getElementById('docDocId').value.trim();
+      if (!message) return;
+      if (!docId) {
+        document.getElementById('docAnswer').style.display = 'block';
+        document.getElementById('docAnswer').innerHTML = '<span style="color:#b91c1c">Please enter a Document ID.</span>';
+        return;
+      }
+      streamEndpoint('/doc-agent/stream', message, 'doc',
+        'docThreadBar', 'docThreadId',
+        document.getElementById('docAnswer'),
+        document.getElementById('docCitations'),
+        document.getElementById('docBtn'),
+        'docStatusBar', 'docStatusMsg',
+        { doc_id: docId, ...langExtra('docLang') });
+    });
+  </script>
+</body>
+</html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Berhan Advisor – API Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1e293b; }
+    h1 { font-size: 1.25rem; margin-bottom: 1.5rem; }
+    section { margin-bottom: 2.5rem; }
+    section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+    section p.desc { font-size: 0.8rem; color: #64748b; margin: 0 0 0.75rem 0; }
+    input[type="text"], textarea { width: 100%; padding: 0.5rem; margin: 0.25rem 0; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.875rem; }
+    textarea { min-height: 72px; resize: vertical; }
+    label { display: block; font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; }
+    button { padding: 0.45rem 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    button.secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    button.secondary:hover { background: #e2e8f0; }
+    .result { margin-top: 0.5rem; padding: 0.75rem; background: #f1f5f9; border-radius: 4px; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
+    .result.error { background: #fee2e2; color: #b91c1c; }
+    .thread-bar { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding: 0.4rem 0.6rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; font-size: 0.775rem; }
+    .thread-bar .label { color: #15803d; font-weight: 600; white-space: nowrap; }
+    .thread-bar .tid { color: #166534; font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .thread-bar button { padding: 0.2rem 0.6rem; font-size: 0.75rem; }
+    .answer { margin-top: 0.5rem; padding: 0.875rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; min-height: 3rem; line-height: 1.65; font-size: 0.9rem; }
+    .answer p { margin: 0 0 0.75rem 0; }
+    .answer p:last-child { margin-bottom: 0; }
+    .answer h1, .answer h2, .answer h3, .answer h4 { margin: 1rem 0 0.4rem 0; font-weight: 600; }
+    .answer ul, .answer ol { padding-left: 1.5rem; margin: 0.4rem 0 0.75rem 0; }
+    .answer li { margin-bottom: 0.25rem; }
+    .answer code { background: #e2e8f0; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.85em; font-family: monospace; }
+    .answer pre { background: #1e293b; color: #e2e8f0; padding: 0.75rem; border-radius: 4px; overflow-x: auto; }
+    .answer pre code { background: none; padding: 0; }
+    .answer strong { font-weight: 600; }
+    .answer blockquote { border-left: 3px solid #cbd5e1; padding-left: 0.75rem; color: #64748b; margin: 0.5rem 0; }
+    .citations { margin-top: 0.75rem; }
+    .citations h3 { font-size: 0.8rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .citation-card { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 0.6rem 0.75rem; margin-bottom: 0.4rem; font-size: 0.8rem; }
+    .citation-card .source { font-weight: 600; color: #0369a1; margin-bottom: 0.2rem; }
+    .citation-card .preview { color: #475569; }
+    .status-bar { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.4rem 0.65rem; background: #fefce8; border: 1px solid #fde047; border-radius: 4px; font-size: 0.8rem; color: #854d0e; }
+    .status-bar .spinner { width: 12px; height: 12px; border: 2px solid #fde047; border-top-color: #854d0e; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
