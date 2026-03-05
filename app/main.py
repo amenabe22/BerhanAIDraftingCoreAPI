@@ -44,7 +44,9 @@ def _apply_language(system_prompt: str, language: Language | None) -> str:
         if language
         else _LANG_DEFAULT_INSTRUCTION
     )
-    return f"{system_prompt}\n\nLANGUAGE: {instruction}"
+    # Language instruction goes at the TOP so the LLM sees it first,
+    # without disrupting the tool-call directives that follow.
+    return f"LANGUAGE: {instruction}\n\n{system_prompt}"
 
 
 class ChatRequest(BaseModel):
