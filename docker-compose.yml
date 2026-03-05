@@ -9,10 +9,9 @@ services:
     container_name: berhan-api
     restart: unless-stopped
 
-    # No host-port binding — nginx reaches the container over the shared network.
-    # Uncomment the line below only for local dev / debugging:
-    # ports:
-    #   - "127.0.0.1:${API_HOST_PORT:-8080}:8000"
+    # Expose on host port 8080 for nginx proxy (e.g. search-api.berhan.ai)
+    ports:
+      - "8080:8000"
 
     # All secrets come from .env (never baked into the image)
     env_file:
