@@ -243,7 +243,7 @@ async def legal_search_stream(request: ChatRequest):
     """Streaming legal search: conversational answer synthesized from retrieved sources, with citations at the end."""
     try:
         graph = get_graph()
-    except ValueError as e:
+    except Exception as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     return await _stream_endpoint(
@@ -259,7 +259,7 @@ async def legal_agent_stream(request: ChatRequest):
     """Streaming legal consultant: advisory answers with citations at the end."""
     try:
         graph = get_graph()
-    except ValueError as e:
+    except Exception as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     return await _stream_endpoint(
@@ -279,7 +279,7 @@ async def doc_agent_stream(request: DocChatRequest):
     """
     try:
         graph = get_doc_graph(request.doc_id)
-    except ValueError as e:
+    except Exception as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     return await _stream_endpoint(

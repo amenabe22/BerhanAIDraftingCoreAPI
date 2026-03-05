@@ -121,13 +121,18 @@ class _LoggingRetriever(BaseRetriever):
 def get_retriever_tool():
     client = _get_qdrant_client()
     embeddings = _get_embeddings()
-    vector_store = _FlatPayloadQdrantVectorStore(
-        client=client,
-        collection_name=settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION,
-        embedding=embeddings,
-        content_payload_key=settings.QDRANT_CONTENT_PAYLOAD_KEY,
-        metadata_payload_key=settings.QDRANT_METADATA_PAYLOAD_KEY,
-    )
+    try:
+        vector_store = _FlatPayloadQdrantVectorStore(
+            client=client,
+            collection_name=settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION,
+            embedding=embeddings,
+            content_payload_key=settings.QDRANT_CONTENT_PAYLOAD_KEY,
+            metadata_payload_key=settings.QDRANT_METADATA_PAYLOAD_KEY,
+        )
+    except Exception as e:
+        raise ValueError(
+            f"Cannot connect to Qdrant collection '{settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION}': {e}"
+        ) from e
     inner = vector_store.as_retriever(search_kwargs={"k": 5})
     retriever = _LoggingRetriever(retriever=inner)
     # Include document_id (source/book), item_id, title so the LLM can cite them
@@ -156,13 +161,18 @@ def get_doc_blocks_retriever_tool(doc_id: str):
     """
     client = _get_qdrant_client()
     embeddings = _get_embeddings()
-    vector_store = _FlatPayloadQdrantVectorStore(
-        client=client,
-        collection_name=settings.QDRANT_DEFAULT_COLLECTION,
-        embedding=embeddings,
-        content_payload_key="text",
-        metadata_payload_key="metadata",
-    )
+    try:
+        vector_store = _FlatPayloadQdrantVectorStore(
+            client=client,
+            collection_name=settings.QDRANT_DEFAULT_COLLECTION,
+            embedding=embeddings,
+            content_payload_key="text",
+            metadata_payload_key="metadata",
+        )
+    except Exception as e:
+        raise ValueError(
+            f"Cannot connect to Qdrant collection '{settings.QDRANT_DEFAULT_COLLECTION}': {e}"
+        ) from e
     # Filter strictly to this document — no cross-document leakage
     doc_filter = Filter(must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))])
     inner = vector_store.as_retriever(search_kwargs={"k": 6, "filter": doc_filter})
