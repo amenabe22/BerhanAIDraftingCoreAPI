@@ -174,10 +174,12 @@ def get_doc_blocks_retriever_tool(doc_id: str):
         retriever,
         name="search_user_documents",
         description=(
-            "Search the user's uploaded document for relevant clauses, paragraphs, or sections. "
-            "Use this tool to answer ANY question about the document or its content — "
-            "including contract clauses, obligations, terms, conditions, penalties, dates, parties, "
-            "and any other text found in the document. "
+            "Search the loaded document for relevant clauses, paragraphs, or sections. "
+            "Call this tool FIRST for ANY user message that could relate to the document — "
+            "including vague requests like 'summarize', 'what is this about', 'explain this', 'what does it say', "
+            "as well as specific questions about parties, dates, obligations, terms, conditions, penalties, "
+            "scope, purpose, rights, warranties, or any other document content. "
+            "When the user's intent is unclear, default to calling this tool before asking for clarification. "
             "Returns doc_id, block_id, block type, and the text content."
         ),
         document_prompt=document_prompt,
