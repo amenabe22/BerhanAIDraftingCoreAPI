@@ -133,7 +133,7 @@ def get_retriever_tool():
         raise ValueError(
             f"Cannot connect to Qdrant collection '{settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION}': {e}"
         ) from e
-    inner = vector_store.as_retriever(search_kwargs={"k": 5})
+    inner = vector_store.as_retriever(search_kwargs={"k": settings.RETRIEVAL_LEGAL_TOP_K})
     retriever = _LoggingRetriever(retriever=inner)
     # Include document_id (source/book), item_id, title so the LLM can cite them
     document_prompt = PromptTemplate.from_template(
@@ -175,7 +175,9 @@ def get_doc_blocks_retriever_tool(doc_id: str):
         ) from e
     # Filter strictly to this document — no cross-document leakage
     doc_filter = Filter(must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))])
-    inner = vector_store.as_retriever(search_kwargs={"k": 6, "filter": doc_filter})
+    inner = vector_store.as_retriever(
+        search_kwargs={"k": settings.RETRIEVAL_DOC_TOP_K, "filter": doc_filter}
+    )
     retriever = _LoggingRetriever(retriever=inner)
     document_prompt = PromptTemplate.from_template(
         "[Doc: {doc_id} | Block: {block_id}{section_id} | {section_title}{type}{section_type}]\n{page_content}"
