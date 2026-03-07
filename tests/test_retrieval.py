@@ -271,6 +271,7 @@ def test_get_retriever_tool_returns_tool_with_correct_name():
 
 
 def test_get_retriever_tool_passes_correct_search_kwargs():
+    from app.config import settings
     from app.retrieval import get_retriever_tool
 
     mock_vector_store = MagicMock()
@@ -287,4 +288,6 @@ def test_get_retriever_tool_passes_correct_search_kwargs():
     ):
         get_retriever_tool()
 
-    mock_vector_store.as_retriever.assert_called_once_with(search_kwargs={"k": 5})
+    mock_vector_store.as_retriever.assert_called_once_with(
+        search_kwargs={"k": settings.RETRIEVAL_LEGAL_TOP_K}
+    )

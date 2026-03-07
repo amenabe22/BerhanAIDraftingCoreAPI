@@ -113,6 +113,7 @@ def test_get_doc_blocks_retriever_tool_passes_doc_id_filter():
     """as_retriever must be called with a Qdrant filter on doc_id."""
     from qdrant_client.models import FieldCondition, Filter
 
+    from app.config import settings
     from app.retrieval import get_doc_blocks_retriever_tool
 
     mock_vs = MagicMock()
@@ -127,7 +128,7 @@ def test_get_doc_blocks_retriever_tool_passes_doc_id_filter():
         get_doc_blocks_retriever_tool(doc_id)
 
     call_kwargs = mock_vs.as_retriever.call_args[1]["search_kwargs"]
-    assert call_kwargs["k"] == 6
+    assert call_kwargs["k"] == settings.RETRIEVAL_DOC_TOP_K
     qdrant_filter = call_kwargs["filter"]
     assert isinstance(qdrant_filter, Filter)
     condition = qdrant_filter.must[0]

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     COHERE_API_URL: str = "https://api.cohere.com"
     COHERE_EMBEDDING_MODEL: str = "embed-multilingual-v3.0"
 
+    # Retrieval – number of chunks returned per query (legal search/advice vs doc search)
+    RETRIEVAL_LEGAL_TOP_K: int = 12
+    RETRIEVAL_DOC_TOP_K: int = 10
+
     @field_validator("QDRANT_API_KEY", "COHERE_API_KEY", mode="before")
     @classmethod
     def strip_api_key_comment(cls, v: str | None) -> str | None:
