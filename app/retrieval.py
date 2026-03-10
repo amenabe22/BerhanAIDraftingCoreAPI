@@ -118,17 +118,81 @@ class _LoggingRetriever(BaseRetriever):
         return docs
 
 
-def get_retriever_tool():
+def get_document_blocks_by_doc_id(doc_id: str) -> list[dict]:
+    """Load document blocks from doc_blocks by doc_id. Returns list of dicts with block_id, text, type (and doc_id). Supports both payload schemas (text/block_id/type and plain_text/section_id/section_type)."""
+    client = _get_qdrant_client()
+    doc_filter = Filter(must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))])
+    raw: list[tuple[int | str, dict]] = []  # (sort_key, block_dict)
+    offset = None
+    while True:
+        points, offset = client.scroll(
+            collection_name=settings.QDRANT_DEFAULT_COLLECTION,
+            scroll_filter=doc_filter,
+            limit=200,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        for p in points or []:
+            payload = p.payload or {}
+            text = payload.get("text") or payload.get("plain_text")
+            if text is None:
+                continue
+            text = str(text).strip()
+            if not text:
+                continue
+            block_id = payload.get("block_id") or payload.get("section_id") or str(p.id)
+            block_type = payload.get("type") or payload.get("section_type") or "paragraph"
+            sort_key: int | str = payload.get("index", payload.get("order", p.id))
+            if isinstance(sort_key, str):
+                try:
+                    sort_key = int(sort_key)
+                except (ValueError, TypeError):
+                    sort_key = str(p.id)
+            raw.append(
+                (
+                    sort_key,
+                    {
+                        "block_id": block_id,
+                        "text": text,
+                        "type": block_type,
+                        "doc_id": doc_id,
+                    },
+                )
+            )
+        if offset is None:
+            break
+    raw.sort(
+        key=lambda x: (
+            0 if isinstance(x[0], int) else 1,
+            x[0] if isinstance(x[0], int) else str(x[0]),
+        )
+    )
+    return [b for _, b in raw]
+
+
+def get_document_text_by_doc_id(doc_id: str) -> str:
+    """Load full document text from doc_blocks by doc_id. Uses get_document_blocks_by_doc_id and joins block text. Returns empty string if none found."""
+    blocks = get_document_blocks_by_doc_id(doc_id)
+    return "\n\n".join(b.get("text", "") for b in blocks if b.get("text"))
+
+
+def get_legal_kb_vector_store() -> _FlatPayloadQdrantVectorStore:
+    """Return the Legal KB vector store for direct similarity_search (e.g. compliance)."""
     client = _get_qdrant_client()
     embeddings = _get_embeddings()
+    return _FlatPayloadQdrantVectorStore(
+        client=client,
+        collection_name=settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION,
+        embedding=embeddings,
+        content_payload_key=settings.QDRANT_CONTENT_PAYLOAD_KEY,
+        metadata_payload_key=settings.QDRANT_METADATA_PAYLOAD_KEY,
+    )
+
+
+def get_retriever_tool():
     try:
-        vector_store = _FlatPayloadQdrantVectorStore(
-            client=client,
-            collection_name=settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION,
-            embedding=embeddings,
-            content_payload_key=settings.QDRANT_CONTENT_PAYLOAD_KEY,
-            metadata_payload_key=settings.QDRANT_METADATA_PAYLOAD_KEY,
-        )
+        vector_store = get_legal_kb_vector_store()
     except Exception as e:
         raise ValueError(
             f"Cannot connect to Qdrant collection '{settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION}': {e}"

@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     RETRIEVAL_LEGAL_TOP_K: int = 12
     RETRIEVAL_DOC_TOP_K: int = 10
 
+    # Compliance analysis
+    COMPLIANCE_ANALYSIS_MODEL: str | None = None  # default: GEMINI_MODEL
+    COMPLIANCE_RERANKER_MODEL: str | None = None  # default: same as analysis model
+    COMPLIANCE_IMPLICATION_INITIAL_LIMIT: int = 15
+    COMPLIANCE_MAX_CLAUSES_FOR_CITATIONS: int = 20
+    COMPLIANCE_ANALYSIS_TEMPERATURE: float = 0.1
+    COMPLIANCE_ANALYSIS_MAX_TOKENS: int = 8192
+    COMPLIANCE_SCORE_ROUNDING: int = 2
+    KNOWLEDGE_RERANK_INITIAL_LIMIT: int = 25
+    KNOWLEDGE_RERANK_TOP: int = 10
+
     @field_validator("QDRANT_API_KEY", "COHERE_API_KEY", mode="before")
     @classmethod
     def strip_api_key_comment(cls, v: str | None) -> str | None:

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
 
+from app.api.v1.endpoints.drafting.compliance import router as compliance_router
 from app.graph import (
     DOC_CONSULTANT_SYSTEM,
     LEGAL_ADVISOR_SYSTEM,
@@ -64,6 +65,8 @@ class DocChatRequest(BaseModel):
 
 app = FastAPI(title="Berhan Advisor Knowledge Agent")
 
+app.include_router(compliance_router, prefix="/drafting")
+
 _TEST_CLIENT_PATH = Path(__file__).resolve().parent.parent / "test_client.html"
 
 
@@ -78,6 +81,7 @@ async def root():
         "legal_search_stream": "/legal-search/stream",
         "legal_agent_stream": "/legal-agent/stream",
         "doc_agent_stream": "/doc-agent/stream",
+        "compliance_analyze": "/drafting/compliance/analyze",
     }
 
 
