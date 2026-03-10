@@ -56,6 +56,14 @@ class ClauseAnalysis(BaseModel):
     implications: str = Field(default="", description="Legal implications.")
     block_id: str | None = Field(default=None, description="Mapped block id if from TipTap.")
     citations: list[LegalCitation] = Field(default_factory=list)
+    ethiopian_law_implications: list[str] = Field(
+        default_factory=list,
+        description="Specific Ethiopian law implications for this clause (populated for non-LOW risk clauses).",
+    )
+    recommendations: list[str] = Field(
+        default_factory=list,
+        description="Actionable recommendations to address risk in this clause (populated for non-LOW risk clauses).",
+    )
 
 
 class EthiopianLawCompliance(BaseModel):

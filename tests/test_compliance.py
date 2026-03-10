@@ -497,8 +497,155 @@ def test_clauses_fallback_from_blocks():
 
 
 # ---------------------------------------------------------------------------
-# knowledge_retrieval (mocked)
+# ClauseAnalysis — ethiopian_law_implications and recommendations fields
 # ---------------------------------------------------------------------------
+
+
+def test_clause_analysis_new_fields_default_empty():
+    from app.models.drafting.compliance import ClauseAnalysis
+
+    c = ClauseAnalysis(clause_id="c1", text="Some clause.", risk_level="LOW")
+    assert c.ethiopian_law_implications == []
+    assert c.recommendations == []
+
+
+def test_clause_analysis_new_fields_populated():
+    from app.models.drafting.compliance import ClauseAnalysis
+
+    c = ClauseAnalysis(
+        clause_id="c2",
+        text="Liability clause.",
+        risk_level="HIGH",
+        ethiopian_law_implications=["Art. 2035 Civil Code applies", "Commercial Code Art. 100"],
+        recommendations=["Add liability cap", "Consult counsel"],
+    )
+    assert c.ethiopian_law_implications == [
+        "Art. 2035 Civil Code applies",
+        "Commercial Code Art. 100",
+    ]
+    assert c.recommendations == ["Add liability cap", "Consult counsel"]
+
+
+def test_to_clause_reads_new_fields_from_llm_dict():
+    """to_clause() builder correctly maps new fields from LLM response dict."""
+    from unittest.mock import MagicMock, patch
+
+    from langchain_core.documents import Document
+
+    from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
+
+    llm_json = """
+    {
+      "document_type": "Contract",
+      "summary": "Test.",
+      "clauses": [
+        {
+          "clause_id": "c1",
+          "text": "No-compete clause.",
+          "risk_level": "HIGH",
+          "implications": "Restricts competition.",
+          "block_id": null,
+          "citations": [],
+          "ethiopian_law_implications": ["Commercial Code Art. 11 restricts anti-competitive terms"],
+          "recommendations": ["Narrow the geographic scope", "Add sunset clause"]
+        }
+      ],
+      "issues": [],
+      "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
+      "recommendations": [],
+      "should_sign": null,
+      "critical_issues": [],
+      "missing_clauses": []
+    }
+    """
+    with (
+        patch(
+            "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
+            return_value=["q"],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.search_legal_knowledge",
+            return_value=[
+                Document(
+                    page_content="Law.",
+                    metadata={"document_id": "Code", "item_id": "1", "title": "T"},
+                ),
+            ],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.rerank_with_llm",
+            return_value=[
+                Document(
+                    page_content="Law.",
+                    metadata={"document_id": "Code", "item_id": "1", "title": "T"},
+                ),
+            ],
+        ),
+        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+    ):
+        mock_llm_cls.return_value.invoke.return_value = MagicMock(content=llm_json)
+        agent = ComplianceAnalysisAgent()
+        resp = agent.analyze_document(document_text="No compete sample.", language="en")
+
+    assert len(resp.clauses) == 1
+    clause = resp.clauses[0]
+    assert clause.risk_level == "HIGH"
+    assert clause.ethiopian_law_implications == [
+        "Commercial Code Art. 11 restricts anti-competitive terms"
+    ]
+    assert clause.recommendations == ["Narrow the geographic scope", "Add sunset clause"]
+
+
+def test_to_clause_missing_new_fields_defaults_to_empty():
+    """to_clause() defaults new fields to [] when LLM omits them (backward compat)."""
+    from unittest.mock import MagicMock, patch
+
+    from langchain_core.documents import Document
+
+    from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
+
+    llm_json = """
+    {
+      "document_type": "Contract",
+      "summary": "Old format.",
+      "clauses": [{"clause_id": "c1", "text": "Clause.", "risk_level": "MEDIUM", "implications": "Some.", "block_id": null, "citations": []}],
+      "issues": [],
+      "ethiopian_law_compliance": {"summary": "", "applicable_laws": [], "concerns": []},
+      "recommendations": [],
+      "should_sign": null,
+      "critical_issues": [],
+      "missing_clauses": []
+    }
+    """
+    with (
+        patch(
+            "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
+            return_value=["q"],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.search_legal_knowledge",
+            return_value=[
+                Document(
+                    page_content="L.", metadata={"document_id": "C", "item_id": "1", "title": "T"}
+                ),
+            ],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.rerank_with_llm",
+            return_value=[
+                Document(
+                    page_content="L.", metadata={"document_id": "C", "item_id": "1", "title": "T"}
+                ),
+            ],
+        ),
+        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+    ):
+        mock_llm_cls.return_value.invoke.return_value = MagicMock(content=llm_json)
+        agent = ComplianceAnalysisAgent()
+        resp = agent.analyze_document(document_text="Some contract.", language="en")
+
+    assert resp.clauses[0].ethiopian_law_implications == []
+    assert resp.clauses[0].recommendations == []
 
 
 def test_generate_targeted_queries_mocked_llm():
@@ -697,10 +844,11 @@ def test_analyze_document_full_pipeline_mocked():
     llm_json = """
     {
       "document_type": "Contract",
-      "overall_risk_level": "LOW",
-      "risk_score": 20,
       "summary": "Low risk.",
-      "clauses": [{"clause_id": "c1", "text": "Clause.", "risk_level": "LOW", "implications": "", "block_id": null, "citations": []}],
+      "clauses": [
+        {"clause_id": "c1", "text": "Clause.", "risk_level": "LOW", "implications": "", "block_id": null, "citations": [], "ethiopian_law_implications": [], "recommendations": []},
+        {"clause_id": "c2", "text": "Liability clause.", "risk_level": "MEDIUM", "implications": "Limits liability.", "block_id": null, "citations": [], "ethiopian_law_implications": ["Art. 2035 Civil Code applies"], "recommendations": ["Clarify cap amount"]}
+      ],
       "issues": [],
       "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
       "recommendations": [],
@@ -732,15 +880,23 @@ def test_analyze_document_full_pipeline_mocked():
         resp = agent.analyze_document(document_text="Sample contract.", language="en")
 
         assert resp.document_type == "Contract"
-        assert resp.overall_risk_level == "LOW"
-        assert resp.risk_score == 0.0
-        assert resp.compliance_score == 100.0
+        assert resp.overall_risk_level == "LOW"  # raw_penalty=5, risk_score=3.33 → LOW
+        assert resp.risk_score == round(5 / 150 * 100, 2)
+        assert resp.compliance_score == round(100 - resp.risk_score, 2)
         assert resp.summary == "Low risk."
-        assert len(resp.clauses) == 1
+        assert len(resp.clauses) == 2
         assert resp.should_sign is True
+        # LOW clause: new fields default to []
+        low_clause = resp.clauses[0]
+        assert low_clause.ethiopian_law_implications == []
+        assert low_clause.recommendations == []
+        # MEDIUM clause: new fields populated from LLM response
+        medium_clause = resp.clauses[1]
+        assert medium_clause.ethiopian_law_implications == ["Art. 2035 Civil Code applies"]
+        assert medium_clause.recommendations == ["Clarify cap amount"]
         assert isinstance(resp.score_breakdown, dict)
-        assert resp.score_breakdown["raw_penalty"] == 0
-        assert resp.score_breakdown["overall_risk_level"] == "LOW"
+        assert resp.score_breakdown["raw_penalty"] == 5  # 1 MEDIUM clause × 5
+        assert resp.score_breakdown["clause_counts"]["MEDIUM"] == 1
 
 
 # ---------------------------------------------------------------------------

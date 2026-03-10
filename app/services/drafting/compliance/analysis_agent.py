@@ -170,13 +170,13 @@ Relevant Ethiopian law (use for citations):
 
 If blocks were provided, reference block_id when tying issues to specific clauses.
 
-IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id if you can match to a block above, and citations: []. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
+IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id if you can match to a block above, and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
 Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
 {{
   "document_type": "string (detected or given)",
   "summary": "string (executive summary)",
-  "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [] }}],
+  "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [], "ethiopian_law_implications": ["string"], "recommendations": ["string"] }}],
   "issues": [{{ "issue_id": "string", "description": "string", "severity": "LOW|MEDIUM|HIGH|CRITICAL", "block_id": "string or null", "citations": [] }}],
   "ethiopian_law_compliance": {{ "summary": "string", "applicable_laws": ["string"], "concerns": ["string"] }},
   "recommendations": ["string"],
@@ -504,6 +504,8 @@ class ComplianceAnalysisAgent:
                 implications=c.get("implications", ""),
                 block_id=c.get("block_id"),
                 citations=_filter_citations(c.get("citations", [])),
+                ethiopian_law_implications=c.get("ethiopian_law_implications", []) or [],
+                recommendations=c.get("recommendations", []) or [],
             )
 
         return ComplianceAnalysisResponse(
