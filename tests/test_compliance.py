@@ -11,7 +11,6 @@ from app.models.drafting.compliance import (
     LegalCitation,
 )
 
-
 # ---------------------------------------------------------------------------
 # ComplianceAnalysisRequest validation
 # ---------------------------------------------------------------------------
@@ -95,7 +94,11 @@ def test_extract_blocks_from_tiptap():
         "type": "doc",
         "content": [
             {"type": "paragraph", "content": [{"type": "text", "text": "First paragraph."}]},
-            {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "Section 1"}]},
+            {
+                "type": "heading",
+                "attrs": {"level": 1},
+                "content": [{"type": "text", "text": "Section 1"}],
+            },
             {"type": "paragraph", "content": [{"type": "text", "text": "Second."}]},
         ],
     }
@@ -209,7 +212,9 @@ def test_compliance_analyze_endpoint_404_when_document_not_found():
 
     from app.main import app
 
-    with patch("app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id") as mock_get:
+    with patch(
+        "app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id"
+    ) as mock_get:
         mock_get.return_value = []
         client = TestClient(app)
         r = client.post(
@@ -217,7 +222,10 @@ def test_compliance_analyze_endpoint_404_when_document_not_found():
             json={"doc_id": "missing-doc", "language": "en"},
         )
         assert r.status_code == 404
-        assert "not found" in r.json().get("detail", "").lower() or "no content" in r.json().get("detail", "").lower()
+        assert (
+            "not found" in r.json().get("detail", "").lower()
+            or "no content" in r.json().get("detail", "").lower()
+        )
 
 
 def test_compliance_analyze_endpoint_returns_schema_with_mocked_agent():
@@ -227,10 +235,17 @@ def test_compliance_analyze_endpoint_returns_schema_with_mocked_agent():
     from app.main import app
 
     sample_blocks = [
-        {"block_id": "b31", "text": "Tax and Pension clause.", "type": "paragraph", "doc_id": "some-uuid"},
+        {
+            "block_id": "b31",
+            "text": "Tax and Pension clause.",
+            "type": "paragraph",
+            "doc_id": "some-uuid",
+        },
     ]
     with (
-        patch("app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id") as mock_get_blocks,
+        patch(
+            "app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id"
+        ) as mock_get_blocks,
         patch("app.api.v1.endpoints.drafting.compliance.ComplianceAnalysisAgent") as MockAgent,
     ):
         mock_get_blocks.return_value = sample_blocks
@@ -245,7 +260,9 @@ def test_compliance_analyze_endpoint_returns_schema_with_mocked_agent():
             critical_issues=[],
             missing_clauses=[],
             citations=[
-                LegalCitation(document_id="Civil Code", item_id="1802", title="Art 1802", excerpt="..."),
+                LegalCitation(
+                    document_id="Civil Code", item_id="1802", title="Art 1802", excerpt="..."
+                ),
             ],
         )
         MockAgent.return_value.analyze_document.return_value = mock_response
@@ -350,7 +367,10 @@ def test_docs_to_citations():
     from app.services.drafting.compliance.analysis_agent import _docs_to_citations
 
     docs = [
-        Document(page_content="Art 1802.", metadata={"document_id": "Civil Code", "item_id": "1802", "title": "Liability"}),
+        Document(
+            page_content="Art 1802.",
+            metadata={"document_id": "Civil Code", "item_id": "1802", "title": "Liability"},
+        ),
     ]
     cites = _docs_to_citations(docs)
     assert len(cites) == 1
@@ -364,7 +384,10 @@ def test_docs_to_citations_uses_fallback_keys_and_skips_empty():
 
     docs = [
         Document(page_content="", metadata={}),
-        Document(page_content="Article text.", metadata={"source_file": "family-code", "article_id": "85"}),
+        Document(
+            page_content="Article text.",
+            metadata={"source_file": "family-code", "article_id": "85"},
+        ),
     ]
     cites = _docs_to_citations(docs)
     assert len(cites) == 1
@@ -377,7 +400,9 @@ def test_format_legal_context():
     from app.services.drafting.compliance.analysis_agent import _format_legal_context
 
     docs = [
-        Document(page_content="Text.", metadata={"document_id": "Code", "item_id": "1", "title": "T"}),
+        Document(
+            page_content="Text.", metadata={"document_id": "Code", "item_id": "1", "title": "T"}
+        ),
     ]
     s = _format_legal_context(docs)
     assert "[Source:" in s
@@ -427,7 +452,10 @@ def test_parse_analysis_response_truncated_repaired():
 def test_validate_and_dedupe_clauses():
     from app.services.drafting.compliance.analysis_agent import _validate_and_dedupe
 
-    data = {"clauses": [{"clause_id": "c1", "text": "A"}, {"clause_id": "c1", "text": "B"}], "issues": []}
+    data = {
+        "clauses": [{"clause_id": "c1", "text": "A"}, {"clause_id": "c1", "text": "B"}],
+        "issues": [],
+    }
     out = _validate_and_dedupe(data)
     assert len(out["clauses"]) == 1
     assert out["clauses"][0]["clause_id"] == "c1"
@@ -582,7 +610,13 @@ def test_get_document_blocks_by_doc_id_mocked():
 
     point1 = MagicMock()
     point1.id = 1
-    point1.payload = {"doc_id": "doc-1", "block_id": "b31", "text": "Tax and Pension clause.", "type": "paragraph", "index": 0}
+    point1.payload = {
+        "doc_id": "doc-1",
+        "block_id": "b31",
+        "text": "Tax and Pension clause.",
+        "type": "paragraph",
+        "index": 0,
+    }
     point2 = MagicMock()
     point2.id = 2
     point2.payload = {"doc_id": "doc-1", "text": "Second block.", "index": 1}
@@ -676,13 +710,20 @@ def test_analyze_document_full_pipeline_mocked():
     }
     """
     with (
-        patch("app.services.drafting.compliance.analysis_agent.generate_targeted_queries", return_value=["q1"]),
-        patch("app.services.drafting.compliance.analysis_agent.search_legal_knowledge") as mock_search,
+        patch(
+            "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
+            return_value=["q1"],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.search_legal_knowledge"
+        ) as mock_search,
         patch("app.services.drafting.compliance.analysis_agent.rerank_with_llm") as mock_rerank,
         patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
     ):
         mock_search.return_value = [
-            Document(page_content="Law.", metadata={"document_id": "Code", "item_id": "1", "title": "T"}),
+            Document(
+                page_content="Law.", metadata={"document_id": "Code", "item_id": "1", "title": "T"}
+            ),
         ]
         mock_rerank.return_value = mock_search.return_value
         mock_llm_cls.return_value.invoke.return_value = MagicMock(content=llm_json)
@@ -692,7 +733,231 @@ def test_analyze_document_full_pipeline_mocked():
 
         assert resp.document_type == "Contract"
         assert resp.overall_risk_level == "LOW"
-        assert resp.risk_score == 20.0
+        assert resp.risk_score == 0.0
+        assert resp.compliance_score == 100.0
         assert resp.summary == "Low risk."
         assert len(resp.clauses) == 1
         assert resp.should_sign is True
+        assert isinstance(resp.score_breakdown, dict)
+        assert resp.score_breakdown["raw_penalty"] == 0
+        assert resp.score_breakdown["overall_risk_level"] == "LOW"
+
+
+# ---------------------------------------------------------------------------
+# scoring.py — deterministic engine
+# ---------------------------------------------------------------------------
+
+
+def test_scoring_all_low_clauses_no_issues():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    result = compute_risk_score(
+        clauses=[{"risk_level": "LOW"}, {"risk_level": "LOW"}],
+        issues=[],
+        missing_clauses=[],
+        should_sign=True,
+        concern_count=0,
+    )
+    assert result["raw_penalty"] == 0
+    assert result["risk_score"] == 0.0
+    assert result["compliance_score"] == 100.0
+    assert result["overall_risk_level"] == "LOW"
+    assert result["clause_counts"] == {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 2}
+
+
+def test_scoring_clause_penalties():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    result = compute_risk_score(
+        clauses=[
+            {"risk_level": "CRITICAL"},
+            {"risk_level": "HIGH"},
+            {"risk_level": "MEDIUM"},
+            {"risk_level": "LOW"},
+        ],
+        issues=[],
+        missing_clauses=[],
+        should_sign=True,
+        concern_count=0,
+    )
+    # CRITICAL(20) + HIGH(10) + MEDIUM(5) + LOW(0) = 35
+    assert result["clause_penalty_total"] == 35
+    assert result["raw_penalty"] == 35
+    assert result["issue_penalty_total"] == 0
+
+
+def test_scoring_issue_penalties():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    result = compute_risk_score(
+        clauses=[],
+        issues=[
+            {"severity": "CRITICAL"},
+            {"severity": "HIGH"},
+            {"severity": "MEDIUM"},
+            {"severity": "LOW"},
+        ],
+        missing_clauses=[],
+        should_sign=True,
+        concern_count=0,
+    )
+    # CRITICAL(15) + HIGH(8) + MEDIUM(3) + LOW(1) = 27
+    assert result["issue_penalty_total"] == 27
+    assert result["raw_penalty"] == 27
+
+
+def test_scoring_missing_clauses_penalty():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    result = compute_risk_score(
+        clauses=[],
+        issues=[],
+        missing_clauses=["clause A", "clause B", "clause C"],
+        should_sign=True,
+        concern_count=0,
+    )
+    # 3 missing × 3 = 9
+    assert result["missing_clauses_count"] == 3
+    assert result["missing_clause_penalty_total"] == 9
+    assert result["raw_penalty"] == 9
+
+
+def test_scoring_should_not_sign_penalty():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    with_penalty = compute_risk_score(
+        clauses=[], issues=[], missing_clauses=[], should_sign=False, concern_count=0
+    )
+    without_penalty = compute_risk_score(
+        clauses=[], issues=[], missing_clauses=[], should_sign=True, concern_count=0
+    )
+    assert with_penalty["should_sign_penalty"] == 10
+    assert without_penalty["should_sign_penalty"] == 0
+    assert with_penalty["raw_penalty"] == 10
+
+
+def test_scoring_concern_penalty():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    result = compute_risk_score(
+        clauses=[], issues=[], missing_clauses=[], should_sign=True, concern_count=4
+    )
+    # 4 concerns × 2 = 8
+    assert result["concern_penalty_total"] == 8
+    assert result["raw_penalty"] == 8
+
+
+def test_scoring_normalization_caps_at_100():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    # Flood with penalties to exceed the ceiling
+    result = compute_risk_score(
+        clauses=[{"risk_level": "CRITICAL"}] * 20,
+        issues=[{"severity": "CRITICAL"}] * 20,
+        missing_clauses=["x"] * 20,
+        should_sign=False,
+        concern_count=20,
+        max_penalty=150,
+    )
+    assert result["risk_score"] == 100.0
+    assert result["compliance_score"] == 0.0
+
+
+def test_scoring_jv_document_scenario():
+    """Reproduces the JV document from the original user query."""
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    clauses = (
+        [{"risk_level": "CRITICAL"}] * 1
+        + [{"risk_level": "MEDIUM"}] * 2
+        + [{"risk_level": "LOW"}] * 39
+    )
+    issues = [{"severity": "CRITICAL"}, {"severity": "HIGH"}]
+    missing = ["x"] * 11
+
+    result = compute_risk_score(
+        clauses=clauses,
+        issues=issues,
+        missing_clauses=missing,
+        should_sign=False,
+        concern_count=4,
+        max_penalty=150,
+    )
+    # CRITICAL(20) + 2×MEDIUM(10) + CRITICAL issue(15) + HIGH issue(8) + 11×missing(33) + sign(10) + 4×concern(8)
+    assert result["raw_penalty"] == 104
+    assert result["risk_score"] == round(104 / 150 * 100, 2)
+    assert result["compliance_score"] == round(100 - result["risk_score"], 2)
+    assert result["overall_risk_level"] == "HIGH"
+
+
+def test_scoring_risk_level_thresholds():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    def score_at(raw, ceiling=100):
+        return compute_risk_score(
+            clauses=[],
+            issues=[],
+            missing_clauses=["x"] * (raw // 3),
+            should_sign=not (raw % 3),
+            concern_count=0,
+            max_penalty=ceiling,
+        )
+
+    critical = compute_risk_score(
+        clauses=[{"risk_level": "CRITICAL"}] * 6,
+        issues=[],
+        missing_clauses=[],
+        should_sign=False,
+        concern_count=0,
+        max_penalty=150,
+    )
+    assert critical["overall_risk_level"] in ("CRITICAL", "HIGH")
+
+    low_result = compute_risk_score(
+        clauses=[{"risk_level": "LOW"}],
+        issues=[],
+        missing_clauses=[],
+        should_sign=True,
+        concern_count=0,
+    )
+    assert low_result["overall_risk_level"] == "LOW"
+
+
+def test_scoring_unknown_risk_level_treated_as_low():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    result = compute_risk_score(
+        clauses=[{"risk_level": "UNKNOWN"}, {"risk_level": ""}],
+        issues=[{"severity": "BOGUS"}],
+        missing_clauses=[],
+        should_sign=None,
+        concern_count=0,
+    )
+    # All unknowns fall back to LOW/LOW; LOW clause=0, LOW issue=1
+    assert result["clause_penalty_total"] == 0
+    assert result["issue_penalty_total"] == 1  # LOW issue = 1 pt
+
+
+def test_scoring_breakdown_keys_present():
+    from app.services.drafting.compliance.scoring import compute_risk_score
+
+    result = compute_risk_score(
+        clauses=[], issues=[], missing_clauses=[], should_sign=None, concern_count=0
+    )
+    expected_keys = {
+        "clause_counts",
+        "clause_penalty_total",
+        "issue_counts",
+        "issue_penalty_total",
+        "missing_clauses_count",
+        "missing_clause_penalty_total",
+        "should_sign_penalty",
+        "concern_count",
+        "concern_penalty_total",
+        "raw_penalty",
+        "max_penalty",
+        "risk_score",
+        "compliance_score",
+        "overall_risk_level",
+    }
+    assert expected_keys == result.keys()

@@ -17,10 +17,13 @@ from app.models.drafting.compliance import (
     LegalIssue,
 )
 from app.services.drafting.compliance.level_config import get_compliance_limits
+from app.services.drafting.compliance.scoring import (
+    DEFAULT_MAX_PENALTY,
+    compute_risk_score,
+)
 from app.services.drafting.knowledge_retrieval import (
     build_clause_legal_query,
     generate_targeted_queries,
-    get_available_source_files,
     rerank_with_llm,
     search_legal_knowledge,
 )
@@ -63,7 +66,9 @@ def extract_blocks_from_tiptap(tiptap_json: dict[str, Any]) -> list[dict[str, An
     return blocks
 
 
-def _extract_full_document_text(tiptap_json: dict[str, Any] | None, document_text: str | None) -> str:
+def _extract_full_document_text(
+    tiptap_json: dict[str, Any] | None, document_text: str | None
+) -> str:
     """Return full document text from TipTap or plain document_text."""
     if document_text:
         return document_text.strip()
@@ -146,11 +151,6 @@ def _build_analysis_prompt(
     legal_context_limit: int = 15_000,
 ) -> str:
     """Build the main analysis prompt with checklist and output schema."""
-    blocks_preview = "\n".join(
-        f"- {b.get('block_id', '')}: {b.get('text', '')[:block_char_limit]}"
-        for b in blocks[:blocks_limit]
-        if b.get("text")
-    )
     return f"""Analyze the following document for compliance with Ethiopian law. Output valid JSON only.
 
 Document type: {document_type}
@@ -175,8 +175,6 @@ IMPORTANT: You MUST populate the "clauses" array. List each substantive clause o
 Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
 {{
   "document_type": "string (detected or given)",
-  "overall_risk_level": "LOW | MEDIUM | HIGH | CRITICAL",
-  "risk_score": number 0-100,
   "summary": "string (executive summary)",
   "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [] }}],
   "issues": [{{ "issue_id": "string", "description": "string", "severity": "LOW|MEDIUM|HIGH|CRITICAL", "block_id": "string or null", "citations": [] }}],
@@ -219,9 +217,8 @@ def _repair_truncated_json(text: str, error_pos: int) -> str | None:
                 stack.append("}")
             elif c == "[":
                 stack.append("]")
-            elif c == "}" or c == "]":
-                if stack and stack[-1] == c:
-                    stack.pop()
+            elif (c == "}" or c == "]") and stack and stack[-1] == c:
+                stack.pop()
         i += 1
     if in_string:
         s += '"'
@@ -234,11 +231,7 @@ def _parse_analysis_response(raw: str) -> dict[str, Any]:
     text = raw.strip()
     # Extract content inside ``` ... ``` if both fences present
     match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
-    if match:
-        text = match.group(1).strip()
-    else:
-        # Unclosed fence: strip leading ```json or ``` so we start at {
-        text = re.sub(r"^```(?:json)?\s*", "", text).strip()
+    text = match.group(1).strip() if match else re.sub(r"^```(?:json)?\s*", "", text).strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
@@ -287,14 +280,16 @@ def _clauses_fallback_from_blocks(blocks: list[dict]) -> list[dict]:
         text = (b.get("text") or "").strip()
         if not text:
             continue
-        out.append({
-            "clause_id": f"clause_{i + 1}",
-            "text": text[:2000],
-            "risk_level": "LOW",
-            "implications": "",
-            "block_id": b.get("block_id"),
-            "citations": [],
-        })
+        out.append(
+            {
+                "clause_id": f"clause_{i + 1}",
+                "text": text[:2000],
+                "risk_level": "LOW",
+                "implications": "",
+                "block_id": b.get("block_id"),
+                "citations": [],
+            }
+        )
     return out
 
 
@@ -307,7 +302,12 @@ def _map_clauses_to_blocks(clauses: list[dict], blocks: list[dict]) -> None:
             continue
         text = (c.get("text") or "")[:300]
         for b in blocks:
-            if b.get("text") and text and b.get("text", "").strip() in text or text in b.get("text", ""):
+            if (
+                b.get("text")
+                and text
+                and b.get("text", "").strip() in text
+                or text in b.get("text", "")
+            ):
                 c["block_id"] = b.get("block_id")
                 break
 
@@ -443,15 +443,24 @@ class ComplianceAnalysisAgent:
             if (i.get("severity") or "").upper() in ("HIGH", "CRITICAL"):
                 critical_issues.append(i)
 
-        # Round risk_score
-        risk_score = data.get("risk_score", 0)
-        if isinstance(risk_score, (int, float)):
-            rounding = getattr(settings, "COMPLIANCE_SCORE_ROUNDING", 2)
-            risk_score = round(float(risk_score), rounding)
-        else:
-            risk_score = 0.0
+        # Deterministic scoring: derive risk_score, compliance_score, and overall_risk_level
+        # from the LLM's clause/issue severity classifications. No LLM math involved.
+        max_penalty = getattr(settings, "COMPLIANCE_SCORE_MAX_PENALTY", DEFAULT_MAX_PENALTY)
+        eth_data_raw = data.get("ethiopian_law_compliance") or {}
+        eth_concerns_raw = eth_data_raw.get("concerns") or []
+        score_breakdown = compute_risk_score(
+            clauses=data.get("clauses", []) or [],
+            issues=data.get("issues", []) or [],
+            missing_clauses=data.get("missing_clauses", []) or [],
+            should_sign=data.get("should_sign"),
+            concern_count=len(eth_concerns_raw),
+            max_penalty=max_penalty,
+        )
+        risk_score: float = score_breakdown["risk_score"]
+        compliance_score: float = score_breakdown["compliance_score"]
+        overall_risk_level: str = score_breakdown["overall_risk_level"]
 
-        eth = data.get("ethiopian_law_compliance") or {}
+        eth = eth_data_raw
         eth_compliance = EthiopianLawCompliance(
             summary=eth.get("summary", ""),
             applicable_laws=eth.get("applicable_laws", []) or [],
@@ -499,8 +508,9 @@ class ComplianceAnalysisAgent:
 
         return ComplianceAnalysisResponse(
             document_type=data.get("document_type", doc_type),
-            overall_risk_level=data.get("overall_risk_level", "MEDIUM"),
+            overall_risk_level=overall_risk_level,
             risk_score=risk_score,
+            compliance_score=compliance_score,
             summary=data.get("summary", ""),
             clauses=[to_clause(c) for c in data.get("clauses", [])],
             issues_by_block_id={k: [to_issue(i) for i in v] for k, v in issues_by_block_id.items()},
@@ -510,4 +520,5 @@ class ComplianceAnalysisAgent:
             critical_issues=[to_issue(i) for i in critical_issues],
             missing_clauses=data.get("missing_clauses", []) or [],
             citations=global_citations,
+            score_breakdown=score_breakdown,
         )

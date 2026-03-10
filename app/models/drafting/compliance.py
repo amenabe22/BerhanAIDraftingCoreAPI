@@ -7,7 +7,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
@@ -77,7 +76,11 @@ class ComplianceAnalysisResponse(BaseModel):
 
     document_type: str = Field(description="Detected or provided document type.")
     overall_risk_level: str = Field(description="LOW | MEDIUM | HIGH | CRITICAL")
-    risk_score: float = Field(description="Numeric risk score (e.g. 0–100).")
+    risk_score: float = Field(description="Numeric risk score 0–100. Higher = riskier.")
+    compliance_score: float = Field(
+        default=0.0,
+        description="Compliance health score 0–100 (100 − risk_score). Higher = healthier.",
+    )
     summary: str = Field(description="Executive summary of the analysis.")
     clauses: list[ClauseAnalysis] = Field(default_factory=list)
     issues_by_block_id: dict[str, list[LegalIssue]] = Field(
@@ -97,4 +100,12 @@ class ComplianceAnalysisResponse(BaseModel):
     citations: list[LegalCitation] = Field(
         default_factory=list,
         description="Global citations used in the analysis.",
+    )
+    score_breakdown: dict = Field(
+        default_factory=dict,
+        description=(
+            "Audit trail showing exactly how risk_score was computed: "
+            "clause_counts, issue_counts, missing_clauses_count, penalty totals, "
+            "raw_penalty, max_penalty, risk_score, compliance_score, overall_risk_level."
+        ),
     )

@@ -41,8 +41,14 @@ class Settings(BaseSettings):
     COMPLIANCE_IMPLICATION_INITIAL_LIMIT: int = 15
     COMPLIANCE_MAX_CLAUSES_FOR_CITATIONS: int = 20
     COMPLIANCE_ANALYSIS_TEMPERATURE: float = 0.1
-    COMPLIANCE_ANALYSIS_MAX_TOKENS: int = 16384  # allow long analysis JSON (clauses/issues); avoid truncation
+    COMPLIANCE_ANALYSIS_MAX_TOKENS: int = (
+        16384  # allow long analysis JSON (clauses/issues); avoid truncation
+    )
     COMPLIANCE_SCORE_ROUNDING: int = 2
+    # Normalization ceiling for the deterministic scoring engine.
+    # raw_penalty is expressed as a fraction of this value to produce risk_score 0–100.
+    # Raise to make the scale more forgiving; lower to make it stricter.
+    COMPLIANCE_SCORE_MAX_PENALTY: int = 150
     KNOWLEDGE_RERANK_INITIAL_LIMIT: int = 25
     KNOWLEDGE_RERANK_TOP: int = 10
 
