@@ -31,6 +31,47 @@ def _compliance_llm(model: str | None = None, temperature: float = 0.0) -> ChatO
     )
 
 
+def build_clause_legal_query(clause_text: str, implications: str) -> str:
+    """Turn clause + implications into a legal-concept query plus dynamic synonyms for retrieval (no raw clause dump)."""
+    clause_snippet = (clause_text or "").strip()[:400]
+    impl_snippet = (implications or "").strip()[:300]
+    if not clause_snippet and not impl_snippet:
+        return ""
+    prompt = f"""You are helping to find relevant Ethiopian law for a contract clause.
+
+Clause (excerpt): {clause_snippet}
+Legal implications (excerpt): {impl_snippet}
+
+Output exactly two lines:
+Line 1: One short search query that would find the Ethiopian legal provisions governing this topic. Describe the legal concept, not the clause wording.
+Line 2: Many synonyms and related terms (comma-separated) so retrieval can match the right articles. For each key concept in the implications, include: alternative phrasings, terms used in Ethiopian statutes, statute or proclamation names, article or provision references, and any wording that would appear in the governing provisions. Aim for a broad, varied list to close the gap between contract language and legal text.
+
+Output only these two lines, no other text."""
+    try:
+        llm = _compliance_llm()
+        response = llm.invoke(prompt)
+        text = (response.content if hasattr(response, "content") else str(response)).strip()
+        lines = [ln.strip() for ln in text.split("\n") if ln.strip()][:2]
+        query_line = lines[0] if lines else ""
+        synonyms_line = lines[1] if len(lines) > 1 else ""
+        # Combine query + synonyms into one retrieval string
+        parts = [query_line]
+        if synonyms_line:
+            for term in (t.strip() for t in synonyms_line.split(",") if t.strip()):
+                if term and term.lower() not in query_line.lower():
+                    parts.append(term)
+        result = " ".join(parts).strip()
+        if result:
+            log.info(
+                "clause_legal_query",
+                extra={"event": "compliance_clause_query", "legal_query": result},
+            )
+        return result or ""
+    except Exception as e:
+        log.warning("build_clause_legal_query failed", extra={"event": "clause_query_error", "error": str(e)})
+        return ""
+
+
 def generate_targeted_queries(doc_type: str, summary: str) -> list[str]:
     """Generate 2–4 targeted search queries from document type and summary. One LLM call."""
     llm = _compliance_llm()

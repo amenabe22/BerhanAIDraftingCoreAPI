@@ -18,6 +18,7 @@ from app.models.drafting.compliance import (
 )
 from app.services.drafting.compliance.level_config import get_compliance_limits
 from app.services.drafting.knowledge_retrieval import (
+    build_clause_legal_query,
     generate_targeted_queries,
     get_available_source_files,
     rerank_with_llm,
@@ -185,13 +186,68 @@ If blocks were provided, reference block_id when tying issues to specific clause
 Output only the JSON object, no markdown or explanation."""
 
 
+def _repair_truncated_json(text: str, error_pos: int) -> str | None:
+    """Attempt to repair JSON truncated mid-string by closing the string and any open braces/brackets."""
+    if error_pos <= 0 or error_pos > len(text):
+        return None
+    s = text[:error_pos].rstrip()
+    # Track open brackets/braces and whether we're inside a string (to close truncation)
+    in_string = False
+    escape = False
+    stack: list[str] = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if escape:
+            escape = False
+            i += 1
+            continue
+        if c == "\\" and in_string:
+            escape = True
+            i += 1
+            continue
+        if c == '"':
+            in_string = not in_string
+            i += 1
+            continue
+        if not in_string:
+            if c == "{":
+                stack.append("}")
+            elif c == "[":
+                stack.append("]")
+            elif c == "}" or c == "]":
+                if stack and stack[-1] == c:
+                    stack.pop()
+        i += 1
+    if in_string:
+        s += '"'
+    repaired = s + "".join(reversed(stack))
+    return repaired
+
+
 def _parse_analysis_response(raw: str) -> dict[str, Any]:
-    """Parse LLM JSON response; strip markdown code block if present."""
+    """Parse LLM JSON response; strip markdown code block if present (closed or unclosed). Repair if truncated."""
     text = raw.strip()
+    # Extract content inside ``` ... ``` if both fences present
     match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
     if match:
         text = match.group(1).strip()
-    return json.loads(text)
+    else:
+        # Unclosed fence: strip leading ```json or ``` so we start at {
+        text = re.sub(r"^```(?:json)?\s*", "", text).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        if "Unterminated string" in e.msg or ("Expecting value" in e.msg and e.pos):
+            # Try repair at end of text first (LLM output cut off at end), then at parser position
+            for pos in (len(text), e.pos):
+                repaired = _repair_truncated_json(text, pos)
+                if repaired:
+                    try:
+                        return json.loads(repaired)
+                    except json.JSONDecodeError:
+                        continue
+        raise
 
 
 def _validate_and_dedupe(data: dict) -> dict:
@@ -286,7 +342,7 @@ class ComplianceAnalysisAgent:
             api_key=settings.OPENROUTER_API_KEY,
             model=model,
             temperature=getattr(settings, "COMPLIANCE_ANALYSIS_TEMPERATURE", 0.1),
-            max_tokens=getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 8192),
+            max_tokens=getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 16384),
             streaming=False,
         )
         prompt = _build_analysis_prompt(
@@ -321,9 +377,22 @@ class ComplianceAnalysisAgent:
                 continue
             if not (c.get("implications") or "").strip():
                 continue
-            query = f"{c.get('text', '')[:150]} {c.get('implications', '')[:150]}".strip()
+            clause_text = c.get("text", "") or ""
+            implications = c.get("implications", "") or ""
+            # Concept-focused query + dynamic synonyms from LLM (no raw clause dump)
+            query = build_clause_legal_query(clause_text, implications)
+            if not query.strip():
+                query = f"{clause_text[:150]} {implications[:150]}".strip()
             if not query:
                 continue
+            log.info(
+                "per_clause_legal_query",
+                extra={
+                    "event": "compliance_per_clause_query",
+                    "clause_id": c.get("clause_id"),
+                    "legal_query": query,
+                },
+            )
             per_docs = search_legal_knowledge(
                 [query],
                 source_filter=source_filter,

@@ -400,6 +400,30 @@ def test_parse_analysis_response_markdown_code_block():
     assert out["document_type"] == "NDA"
 
 
+def test_parse_analysis_response_unclosed_code_fence():
+    """Unclosed ```json fence is stripped so JSON parses (avoids 'Expecting value: line 1 column 1')."""
+    from app.services.drafting.compliance.analysis_agent import _parse_analysis_response
+
+    raw = '```json\n{"document_type": "Contract", "overall_risk_level": "MEDIUM", "risk_score": 65}'
+    out = _parse_analysis_response(raw)
+    assert out["document_type"] == "Contract"
+    assert out["overall_risk_level"] == "MEDIUM"
+    assert out["risk_score"] == 65
+
+
+def test_parse_analysis_response_truncated_repaired():
+    """Truncated JSON (unterminated string) is repaired so parsing succeeds; truncated value is preserved."""
+    from app.services.drafting.compliance.analysis_agent import _parse_analysis_response
+
+    # Simulates LLM output cut off mid-string (e.g. max_tokens). Repair at end of text preserves value.
+    raw = '{"document_type": "Contract", "overall_risk_level": "MEDIUM", "risk_score": 65, "summary": "A long summary that got cut'
+    out = _parse_analysis_response(raw)
+    assert out["document_type"] == "Contract"
+    assert out["overall_risk_level"] == "MEDIUM"
+    assert out["risk_score"] == 65
+    assert out.get("summary") == "A long summary that got cut"
+
+
 def test_validate_and_dedupe_clauses():
     from app.services.drafting.compliance.analysis_agent import _validate_and_dedupe
 
@@ -492,6 +516,33 @@ def test_search_legal_knowledge_mocked_store():
         results = search_legal_knowledge(["query1", "query2"], top_k_per_query=2, rrf_top_k=5)
         assert len(results) >= 1
         assert results[0].page_content == "Law text."
+
+
+def test_build_clause_legal_query_mocked():
+    """build_clause_legal_query returns LLM-generated query + dynamic synonyms; empty on failure."""
+    from app.services.drafting.knowledge_retrieval import build_clause_legal_query
+
+    # Two-line format: line 1 = query, line 2 = comma-separated synonyms
+    with patch("app.services.drafting.knowledge_retrieval._compliance_llm") as mock_llm_cls:
+        mock_llm_cls.return_value.invoke.return_value = MagicMock(
+            content="Ethiopian law employee prohibition similar trade\nprivate trade, Article 29, Civil Code, restraint of trade"
+        )
+        out = build_clause_legal_query("Employee shall not solicit clients.", "Restraint of trade.")
+        assert "Ethiopian law" in out or "prohibition" in out
+        assert "private trade" in out
+        assert "Article 29" in out
+    # Single line only: still used as query
+    with patch("app.services.drafting.knowledge_retrieval._compliance_llm") as mock_llm_cls:
+        mock_llm_cls.return_value.invoke.return_value = MagicMock(
+            content="Labour Proclamation termination notice period"
+        )
+        out = build_clause_legal_query("Termination clause.", "Notice.")
+        assert "Labour Proclamation" in out or "termination" in out
+    # Failure: returns empty
+    with patch("app.services.drafting.knowledge_retrieval._compliance_llm") as mock_llm_cls:
+        mock_llm_cls.return_value.invoke.side_effect = Exception("api error")
+        out = build_clause_legal_query("Some clause.", "Implications.")
+        assert out == ""
 
 
 def test_get_document_blocks_by_doc_id_mocked():
