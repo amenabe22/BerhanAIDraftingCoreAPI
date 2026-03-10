@@ -450,6 +450,24 @@ def test_map_clauses_to_blocks():
     assert clauses[0]["block_id"] == "b0"
 
 
+def test_clauses_fallback_from_blocks():
+    from app.services.drafting.compliance.analysis_agent import _clauses_fallback_from_blocks
+
+    blocks = [
+        {"block_id": "b1", "text": "First paragraph.", "type": "paragraph"},
+        {"block_id": "b2", "text": ""},
+        {"block_id": "b3", "text": "Third paragraph."},
+    ]
+    out = _clauses_fallback_from_blocks(blocks)
+    assert len(out) == 2
+    assert out[0]["clause_id"] == "clause_1"
+    assert out[0]["text"] == "First paragraph."
+    assert out[0]["risk_level"] == "LOW"
+    assert out[0]["block_id"] == "b1"
+    assert out[1]["clause_id"] == "clause_3"
+    assert out[1]["text"] == "Third paragraph."
+
+
 # ---------------------------------------------------------------------------
 # knowledge_retrieval (mocked)
 # ---------------------------------------------------------------------------
@@ -543,6 +561,19 @@ def test_build_clause_legal_query_mocked():
         mock_llm_cls.return_value.invoke.side_effect = Exception("api error")
         out = build_clause_legal_query("Some clause.", "Implications.")
         assert out == ""
+
+    # Long article-number list is capped: only a few article-like terms and max synonym count
+    with patch("app.services.drafting.knowledge_retrieval._compliance_llm") as mock_llm_cls:
+        # Simulate LLM dumping Article 3325, 3326, ... 3340
+        synonyms = ", ".join([f"Article {n}" for n in range(3325, 3341)])
+        mock_llm_cls.return_value.invoke.return_value = MagicMock(
+            content=f"Ethiopian arbitration law\n{synonyms}"
+        )
+        out = build_clause_legal_query("Arbitration clause.", "Dispute resolution.")
+        # Should contain query and at most MAX_ARTICLE_LIKE_TERMS article refs; total length capped
+        assert "Ethiopian" in out or "arbitration" in out
+        assert out.count("Article") <= 3
+        assert len(out) <= 1200 + 50  # MAX_CLAUSE_QUERY_CHARS + small buffer
 
 
 def test_get_document_blocks_by_doc_id_mocked():

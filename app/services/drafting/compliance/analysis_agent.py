@@ -168,7 +168,11 @@ Relevant Ethiopian law (use for citations):
 {legal_context[:legal_context_limit]}
 ---
 
-If blocks were provided, reference block_id when tying issues to specific clauses. Output a single JSON object with this structure (use empty arrays/objects where needed):
+If blocks were provided, reference block_id when tying issues to specific clauses.
+
+IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id if you can match to a block above, and citations: []. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
+
+Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
 {{
   "document_type": "string (detected or given)",
   "overall_risk_level": "LOW | MEDIUM | HIGH | CRITICAL",
@@ -276,6 +280,24 @@ def _validate_and_dedupe(data: dict) -> dict:
     return data
 
 
+def _clauses_fallback_from_blocks(blocks: list[dict]) -> list[dict]:
+    """When LLM returns no clauses, derive one clause per block with text so response isn't empty."""
+    out: list[dict] = []
+    for i, b in enumerate(blocks):
+        text = (b.get("text") or "").strip()
+        if not text:
+            continue
+        out.append({
+            "clause_id": f"clause_{i + 1}",
+            "text": text[:2000],
+            "risk_level": "LOW",
+            "implications": "",
+            "block_id": b.get("block_id"),
+            "citations": [],
+        })
+    return out
+
+
 def _map_clauses_to_blocks(clauses: list[dict], blocks: list[dict]) -> None:
     """Assign block_id to clauses by matching text/order where possible."""
     if not blocks:
@@ -365,6 +387,13 @@ class ComplianceAnalysisAgent:
             raise ValueError("LLM did not return valid JSON") from e
 
         data = _validate_and_dedupe(data)
+        # Fallback: if LLM returned no clauses but we have blocks with text, derive minimal clauses so response isn't empty
+        if not (data.get("clauses") or []) and blocks:
+            data["clauses"] = _clauses_fallback_from_blocks(blocks)
+            log.info(
+                "compliance_clauses_fallback",
+                extra={"event": "clauses_from_blocks", "count": len(data["clauses"])},
+            )
         _map_clauses_to_blocks(data.get("clauses", []), blocks)
 
         # 5) Per-clause citations for non-LOW risk clauses with implications (level-specific)

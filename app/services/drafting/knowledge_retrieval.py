@@ -1,5 +1,6 @@
 """Targeted legal knowledge retrieval for compliance: query gen, search + RRF, LLM rerank."""
 
+import re
 from functools import lru_cache
 from typing import Any
 
@@ -16,6 +17,13 @@ log = get_logger("knowledge_retrieval")
 # RRF constant (standard value)
 RRF_K = 60
 
+# Clause query: cap synonyms and total length so we never pass huge article-number lists to search
+MAX_SYNONYM_TERMS = 20
+MAX_CLAUSE_QUERY_CHARS = 1200
+# Terms that are only digits or "Article N" (optional "Article") count as article-like; allow a few, skip the rest
+MAX_ARTICLE_LIKE_TERMS = 3
+_RE_ARTICLE_NUMBER = re.compile(r"^(?:Article\s*)?(\d+)$", re.I)
+
 # Cache for available sources (in-process, no TTL for simplicity)
 _available_sources_cache: list[str] | None = None
 
@@ -31,6 +39,11 @@ def _compliance_llm(model: str | None = None, temperature: float = 0.0) -> ChatO
     )
 
 
+def _is_article_like(term: str) -> bool:
+    """True if term is only a number or 'Article N' (used to cap article-number dumping)."""
+    return bool(_RE_ARTICLE_NUMBER.match(term.strip()))
+
+
 def build_clause_legal_query(clause_text: str, implications: str) -> str:
     """Turn clause + implications into a legal-concept query plus dynamic synonyms for retrieval (no raw clause dump)."""
     clause_snippet = (clause_text or "").strip()[:400]
@@ -44,7 +57,7 @@ Legal implications (excerpt): {impl_snippet}
 
 Output exactly two lines:
 Line 1: One short search query that would find the Ethiopian legal provisions governing this topic. Describe the legal concept, not the clause wording.
-Line 2: Many synonyms and related terms (comma-separated) so retrieval can match the right articles. For each key concept in the implications, include: alternative phrasings, terms used in Ethiopian statutes, statute or proclamation names, article or provision references, and any wording that would appear in the governing provisions. Aim for a broad, varied list to close the gap between contract language and legal text.
+Line 2: Up to 15–20 synonyms and related terms (comma-separated). Include: alternative phrasings, terms used in Ethiopian statutes, statute or proclamation names. You may include 1–3 specific article references (e.g. "Article 29", "Article 3325") only if directly relevant to this clause. Do NOT list article numbers in sequence (e.g. do not output Article 3325, 3326, 3327, ...). Output only conceptual terms and a few key article references.
 
 Output only these two lines, no other text."""
     try:
@@ -54,13 +67,23 @@ Output only these two lines, no other text."""
         lines = [ln.strip() for ln in text.split("\n") if ln.strip()][:2]
         query_line = lines[0] if lines else ""
         synonyms_line = lines[1] if len(lines) > 1 else ""
-        # Combine query + synonyms into one retrieval string
+        # Combine query + synonyms; cap terms and filter out long article-number runs
         parts = [query_line]
-        if synonyms_line:
-            for term in (t.strip() for t in synonyms_line.split(",") if t.strip()):
-                if term and term.lower() not in query_line.lower():
-                    parts.append(term)
+        query_lower = query_line.lower()
+        article_like_count = 0
+        for term in (t.strip() for t in synonyms_line.split(",") if t.strip()):
+            if len(parts) > MAX_SYNONYM_TERMS:
+                break
+            if not term or term.lower() in query_lower:
+                continue
+            if _is_article_like(term):
+                article_like_count += 1
+                if article_like_count > MAX_ARTICLE_LIKE_TERMS:
+                    continue
+            parts.append(term)
         result = " ".join(parts).strip()
+        if len(result) > MAX_CLAUSE_QUERY_CHARS:
+            result = result[:MAX_CLAUSE_QUERY_CHARS].rsplit(" ", 1)[0]
         if result:
             log.info(
                 "clause_legal_query",
