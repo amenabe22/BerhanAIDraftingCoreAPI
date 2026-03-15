@@ -36,6 +36,11 @@ def _llm() -> ChatOpenAI:
         model=settings.GEMINI_MODEL,
         temperature=0.1,
         streaming=True,
+        # Disable Gemini's internal "thinking" phase — thinking models buffer the
+        # entire reasoning trace before emitting any tokens, which breaks SSE streaming.
+        # OpenRouter's unified "reasoning" param with effort "none" disables thinking
+        # across Gemini 2.5 and other reasoning models.
+        model_kwargs={"extra_body": {"reasoning": {"effort": "none"}}},
     )
 
 
