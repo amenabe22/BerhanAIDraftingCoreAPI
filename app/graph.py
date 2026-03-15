@@ -110,7 +110,7 @@ def _trim(messages: list[BaseMessage], system: SystemMessage) -> list[BaseMessag
     return [system, *trimmed]
 
 
-def _agent_node(state: dict) -> dict:
+async def _agent_node(state: dict) -> dict:
     messages = state["messages"]
     log.info(
         "agent step",
@@ -125,7 +125,7 @@ def _agent_node(state: dict) -> dict:
         system = SystemMessage(content=LEGAL_AGENT_SYSTEM)
 
     messages_to_send = _trim(messages, system)
-    response = _llm_with_tools().invoke(messages_to_send)
+    response = await _llm_with_tools().ainvoke(messages_to_send)
 
     if getattr(response, "tool_calls", None):
 
@@ -198,7 +198,7 @@ def build_doc_graph(doc_id: str):
     doc_tool = get_doc_blocks_retriever_tool(doc_id)
     llm_with_doc_tools = _llm().bind_tools([_tool(), doc_tool])
 
-    def _node(state: dict) -> dict:
+    async def _node(state: dict) -> dict:
         messages = state["messages"]
         log.info(
             "doc agent step",
@@ -210,7 +210,7 @@ def build_doc_graph(doc_id: str):
             else SystemMessage(content=DOC_CONSULTANT_SYSTEM)
         )
         messages_to_send = _trim(messages, system)
-        response = llm_with_doc_tools.invoke(messages_to_send)
+        response = await llm_with_doc_tools.ainvoke(messages_to_send)
 
         if getattr(response, "tool_calls", None):
 
