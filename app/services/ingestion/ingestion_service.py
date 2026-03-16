@@ -1,5 +1,6 @@
 """Main ingestion service for processing and storing documents."""
 
+import contextlib
 import json
 from datetime import datetime
 from typing import Any
@@ -61,7 +62,7 @@ class IngestionService:
             coll_name = await ensure_collection(doc_id=doc_id, collection_name=collection_name)
 
             # Ensure document record exists
-            document = await self._ensure_document(doc_id, coll_name)
+            await self._ensure_document(doc_id, coll_name)
 
             # Update status to processing
             await self._update_document_status(doc_id, DocumentStatus.PROCESSING)
@@ -216,10 +217,8 @@ class IngestionService:
             else:
                 logger.error(f"Failed to ingest document {doc_id}: {e}", exc_info=True)
             # Update document status to failed
-            try:
+            with contextlib.suppress(Exception):
                 await self._update_document_status(doc_id, DocumentStatus.FAILED)
-            except Exception:
-                pass  # Ignore errors when updating status
             raise
 
     async def _ensure_document(self, doc_id: UUID, collection_name: str) -> Document:
