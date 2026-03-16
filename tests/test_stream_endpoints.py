@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 
 from tests.conftest import (
     CITATION_BLOCK,
@@ -275,15 +275,15 @@ async def test_sse_headers(endpoint):
 
 
 # ---------------------------------------------------------------------------
-# 12. Second turn with existing thread_id uses HumanMessage only (no SystemMessage injected again)
+# 12. Input always contains exactly one HumanMessage (graph owns system prompt)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("endpoint", ENDPOINTS)
-async def test_followup_turn_injects_only_human_message(endpoint):
-    """On turn 2+, _is_new_thread returns False → initial_messages = [HumanMessage only]."""
-    graph = make_mock_graph([_make_ai_token_chunk("Follow-up answer.")], has_state=True)
+async def test_input_contains_only_human_message(endpoint):
+    """main.py passes only HumanMessage to the graph; system prompt is owned by the graph."""
+    graph = make_mock_graph([_make_ai_token_chunk("Answer.")])
     captured = {}
 
     original_astream = graph.astream
@@ -299,91 +299,53 @@ async def test_followup_turn_injects_only_human_message(endpoint):
         from app.main import app
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.post(
-                endpoint, json={"message": "follow-up", "thread_id": "existing-thread"}
-            )
+            await client.post(endpoint, json={"message": "test question"})
 
     assert len(captured["messages"]) == 1
     assert isinstance(captured["messages"][0], HumanMessage)
+    assert captured["messages"][0].content == "test question"
 
 
 # ---------------------------------------------------------------------------
-# 13. First turn injects SystemMessage + HumanMessage
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("endpoint", ENDPOINTS)
-async def test_first_turn_injects_system_and_human_message(endpoint):
-    graph = make_mock_graph([_make_ai_token_chunk("First answer.")], has_state=False)
-    captured = {}
-
-    original_astream = graph.astream
-
-    async def capturing_astream(inputs, **kwargs):
-        captured["messages"] = inputs["messages"]
-        async for chunk in original_astream(inputs, **kwargs):
-            yield chunk
-
-    graph.astream = capturing_astream
-
-    with patch("app.main.get_graph", return_value=graph):
-        from app.main import app
-
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            await client.post(endpoint, json={"message": "first question"})
-
-    assert len(captured["messages"]) == 2
-    assert isinstance(captured["messages"][0], SystemMessage)
-    assert isinstance(captured["messages"][1], HumanMessage)
-
-
-# ---------------------------------------------------------------------------
-# 14. The two endpoints inject different system prompts
+# 13. get_graph is called with the language-prefixed system prompt
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_legal_search_injects_legal_agent_system():
+async def test_legal_search_calls_get_graph_with_system_prompt():
     from app.graph import LEGAL_AGENT_SYSTEM
 
-    graph = make_mock_graph([_make_ai_token_chunk("ok")], has_state=False)
-    captured = {}
+    graph = make_mock_graph([_make_ai_token_chunk("ok")])
+    captured_prompt = {}
 
-    async def capturing_astream(inputs, **kwargs):
-        captured["messages"] = inputs["messages"]
-        for c in []:
-            yield c
+    def fake_get_graph(system_prompt):
+        captured_prompt["value"] = system_prompt
+        return graph
 
-    graph.astream = capturing_astream
-
-    with patch("app.main.get_graph", return_value=graph):
+    with patch("app.main.get_graph", side_effect=fake_get_graph):
         from app.main import app
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             await client.post("/legal-search/stream", json={"message": "q"})
 
-    assert LEGAL_AGENT_SYSTEM in captured["messages"][0].content
+    assert LEGAL_AGENT_SYSTEM in captured_prompt["value"]
 
 
 @pytest.mark.asyncio
-async def test_legal_agent_injects_legal_advisor_system():
+async def test_legal_agent_calls_get_graph_with_advisor_system_prompt():
     from app.graph import LEGAL_ADVISOR_SYSTEM
 
-    graph = make_mock_graph([_make_ai_token_chunk("ok")], has_state=False)
-    captured = {}
+    graph = make_mock_graph([_make_ai_token_chunk("ok")])
+    captured_prompt = {}
 
-    async def capturing_astream(inputs, **kwargs):
-        captured["messages"] = inputs["messages"]
-        for c in []:
-            yield c
+    def fake_get_graph(system_prompt):
+        captured_prompt["value"] = system_prompt
+        return graph
 
-    graph.astream = capturing_astream
-
-    with patch("app.main.get_graph", return_value=graph):
+    with patch("app.main.get_graph", side_effect=fake_get_graph):
         from app.main import app
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             await client.post("/legal-agent/stream", json={"message": "q"})
 
-    assert LEGAL_ADVISOR_SYSTEM in captured["messages"][0].content
+    assert LEGAL_ADVISOR_SYSTEM in captured_prompt["value"]

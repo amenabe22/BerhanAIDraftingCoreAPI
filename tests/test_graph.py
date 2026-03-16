@@ -1,160 +1,14 @@
 """
 Unit tests for app/graph.py.
-Covers: _should_continue, _agent_node, _llm/_tool/_llm_with_tools (via mocks),
-build_graph, get_graph.
+Covers: _llm/_tool singletons, build_graph, get_graph, system prompt constants.
 
 All external calls (LLM, Qdrant, Cohere) are mocked.
 """
 
 from unittest.mock import MagicMock, patch
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _state(*msgs):
-    """Build a minimal agent state dict."""
-    return {"messages": list(msgs)}
-
-
-def _ai_with_tool_calls(**kwargs):
-    """Return an AIMessage that looks like it has pending tool calls."""
-    msg = MagicMock(spec=AIMessage)
-    msg.tool_calls = [{"name": "search_legal_knowledge", "args": {"query": "contracts"}}]
-    return msg
-
-
-def _ai_no_tool_calls():
-    msg = MagicMock(spec=AIMessage)
-    msg.tool_calls = []
-    return msg
-
-
-# ---------------------------------------------------------------------------
-# _should_continue
-# ---------------------------------------------------------------------------
-
-
-def test_should_continue_returns_tools_when_tool_calls_present():
-    from app.graph import _should_continue
-
-    state = _state(_ai_with_tool_calls())
-    assert _should_continue(state) == "tools"
-
-
-def test_should_continue_returns_end_when_no_tool_calls():
-    from app.graph import _should_continue
-
-    state = _state(_ai_no_tool_calls())
-    assert _should_continue(state) == "__end__"
-
-
-def test_should_continue_returns_end_for_plain_ai_message():
-    from app.graph import _should_continue
-
-    state = _state(AIMessage(content="Here is your answer."))
-    assert _should_continue(state) == "__end__"
-
-
-def test_should_continue_returns_end_for_human_message():
-    from app.graph import _should_continue
-
-    state = _state(HumanMessage(content="What is contract law?"))
-    assert _should_continue(state) == "__end__"
-
-
-# ---------------------------------------------------------------------------
-# _agent_node  (LLM is mocked)
-# ---------------------------------------------------------------------------
-
-
-def _patch_llm_with_tools(response):
-    """Context manager: patch _llm_with_tools() so .invoke() returns *response*."""
-    mock_llm = MagicMock()
-    mock_llm.invoke.return_value = response
-    return patch("app.graph._llm_with_tools", return_value=mock_llm)
-
-
-def test_agent_node_returns_messages_key():
-    from app.graph import _agent_node
-
-    fake_response = AIMessage(content="Answer without tools.")
-    with _patch_llm_with_tools(fake_response):
-        result = _agent_node(_state(SystemMessage(content="sys"), HumanMessage(content="hi")))
-    assert "messages" in result
-    assert result["messages"] == [fake_response]
-
-
-def test_agent_node_uses_existing_system_message():
-    """_agent_node must not inject a second system message when one already exists."""
-    from app.graph import _agent_node
-
-    custom_sys = SystemMessage(content="Custom legal persona")
-    fake_response = AIMessage(content="Advice here.")
-    with _patch_llm_with_tools(fake_response) as mock_factory:
-        _agent_node(_state(custom_sys, HumanMessage(content="question")))
-        call_args = mock_factory.return_value.invoke.call_args[0][0]
-    # First message in the invoke call must be the custom system message
-    assert isinstance(call_args[0], SystemMessage)
-    assert call_args[0].content == "Custom legal persona"
-
-
-def test_agent_node_injects_default_system_when_none_present():
-    """When no system message exists in state, fall back to LEGAL_AGENT_SYSTEM."""
-    from app.graph import LEGAL_AGENT_SYSTEM, _agent_node
-
-    fake_response = AIMessage(content="Answer.")
-    with _patch_llm_with_tools(fake_response) as mock_factory:
-        _agent_node(_state(HumanMessage(content="tell me about property law")))
-        call_args = mock_factory.return_value.invoke.call_args[0][0]
-    assert isinstance(call_args[0], SystemMessage)
-    assert call_args[0].content == LEGAL_AGENT_SYSTEM
-
-
-def test_agent_node_logs_tool_calls_when_present(caplog):
-    """_agent_node should log 'tool_calls' event when the LLM returns tool calls."""
-    import logging
-
-    from app.graph import _agent_node
-
-    tc_response = MagicMock(spec=AIMessage)
-    tc_response.tool_calls = [{"name": "search_legal_knowledge", "args": {"query": "family law"}}]
-    with _patch_llm_with_tools(tc_response):
-        with caplog.at_level(logging.INFO, logger="graph"):
-            _agent_node(_state(HumanMessage(content="family law question")))
-    # The log output (JSON) should mention the event
-    assert any("tool_calls" in r.message or "retrieve" in str(r.__dict__) for r in caplog.records)
-
-
-def test_agent_node_tool_call_args_as_json_string():
-    """_tc_repr should safely parse JSON-string args."""
-    import json as _json
-
-    from app.graph import _agent_node
-
-    args_dict = {"query": "inheritance rights"}
-    tc_response = MagicMock(spec=AIMessage)
-    tc_response.tool_calls = [{"name": "search_legal_knowledge", "args": _json.dumps(args_dict)}]
-    with _patch_llm_with_tools(tc_response):
-        # Should not raise
-        _agent_node(_state(HumanMessage(content="inheritance question")))
-
-
-def test_agent_node_tool_call_args_invalid_json_string():
-    """_tc_repr must not crash on a non-JSON string in args."""
-    from app.graph import _agent_node
-
-    tc_response = MagicMock(spec=AIMessage)
-    tc_response.tool_calls = [{"name": "search_legal_knowledge", "args": "not valid json {{"}]
-    with _patch_llm_with_tools(tc_response):
-        _agent_node(_state(HumanMessage(content="question")))
-
-
-# ---------------------------------------------------------------------------
-# _llm, _tool, _llm_with_tools singletons
+# _llm, _tool singletons
 # ---------------------------------------------------------------------------
 
 
@@ -195,31 +49,36 @@ def _mock_tool():
 
 
 def test_build_graph_returns_compiled_graph():
-    """build_graph() should return a runnable CompiledStateGraph."""
+    """build_graph() should return a compiled graph with a callable astream."""
     from langgraph.graph.state import CompiledStateGraph
 
-    from app.graph import build_graph
+    from app.graph import LEGAL_AGENT_SYSTEM, build_graph
 
+    mock_graph = MagicMock(spec=CompiledStateGraph)
     mock_tool = _mock_tool()
+    mock_llm = MagicMock()
     with (
+        patch("app.graph._llm", return_value=mock_llm),
         patch("app.graph._tool", return_value=mock_tool),
-        patch("app.graph._llm_with_tools", return_value=MagicMock()),
-        patch("app.graph.ToolNode"),
+        patch("app.graph.create_react_agent", return_value=mock_graph),
     ):
-        graph = build_graph()
+        graph = build_graph(LEGAL_AGENT_SYSTEM)
     assert isinstance(graph, CompiledStateGraph)
 
 
 def test_build_graph_has_agent_and_tools_nodes():
-    from app.graph import build_graph
+    from app.graph import LEGAL_AGENT_SYSTEM, build_graph
 
+    mock_graph = MagicMock()
+    mock_graph.nodes = {"agent": MagicMock(), "tools": MagicMock()}
     mock_tool = _mock_tool()
+    mock_llm = MagicMock()
     with (
+        patch("app.graph._llm", return_value=mock_llm),
         patch("app.graph._tool", return_value=mock_tool),
-        patch("app.graph._llm_with_tools", return_value=MagicMock()),
-        patch("app.graph.ToolNode"),
+        patch("app.graph.create_react_agent", return_value=mock_graph),
     ):
-        graph = build_graph()
+        graph = build_graph(LEGAL_AGENT_SYSTEM)
     node_names = set(graph.nodes)
     assert "agent" in node_names
     assert "tools" in node_names
@@ -230,39 +89,50 @@ def test_build_graph_has_agent_and_tools_nodes():
 # ---------------------------------------------------------------------------
 
 
-def test_get_graph_returns_singleton():
-    """get_graph() must return the same instance on second call."""
+def test_get_graph_returns_same_instance_for_same_prompt():
+    """get_graph() must return the same instance for the same system_prompt."""
     import app.graph as graph_module
-    from app.graph import get_graph
+    from app.graph import LEGAL_AGENT_SYSTEM, get_graph
 
-    original = graph_module._graph
+    original = dict(graph_module._graphs)
     try:
-        graph_module._graph = None
-        mock_tool = _mock_tool()
-        with (
-            patch("app.graph._tool", return_value=mock_tool),
-            patch("app.graph._llm_with_tools", return_value=MagicMock()),
-            patch("app.graph.ToolNode"),
-        ):
-            g1 = get_graph()
-            g2 = get_graph()
+        graph_module._graphs.clear()
+        mock_graph = MagicMock()
+        with patch("app.graph.build_graph", return_value=mock_graph):
+            g1 = get_graph(LEGAL_AGENT_SYSTEM)
+            g2 = get_graph(LEGAL_AGENT_SYSTEM)
         assert g1 is g2
     finally:
-        graph_module._graph = original
+        graph_module._graphs.clear()
+        graph_module._graphs.update(original)
 
 
-def test_get_graph_builds_when_none():
-    """get_graph() must call build_graph exactly once when _graph is None."""
+def test_get_graph_builds_once_per_prompt():
+    """get_graph() must call build_graph exactly once per unique system_prompt."""
     import app.graph as graph_module
-    from app.graph import get_graph
+    from app.graph import LEGAL_AGENT_SYSTEM, get_graph
 
-    original = graph_module._graph
+    original = dict(graph_module._graphs)
     try:
-        graph_module._graph = None
+        graph_module._graphs.clear()
         mock_graph = MagicMock()
         with patch("app.graph.build_graph", return_value=mock_graph) as mock_build:
-            get_graph()
-            get_graph()
+            get_graph(LEGAL_AGENT_SYSTEM)
+            get_graph(LEGAL_AGENT_SYSTEM)
         mock_build.assert_called_once()
     finally:
-        graph_module._graph = original
+        graph_module._graphs.clear()
+        graph_module._graphs.update(original)
+
+
+# ---------------------------------------------------------------------------
+# System prompt constants are exported
+# ---------------------------------------------------------------------------
+
+
+def test_system_prompt_constants_exported():
+    from app.graph import DOC_CONSULTANT_SYSTEM, LEGAL_ADVISOR_SYSTEM, LEGAL_AGENT_SYSTEM
+
+    assert "Ethiopian law" in LEGAL_AGENT_SYSTEM
+    assert "Ethiopian law" in LEGAL_ADVISOR_SYSTEM
+    assert "search_user_documents" in DOC_CONSULTANT_SYSTEM

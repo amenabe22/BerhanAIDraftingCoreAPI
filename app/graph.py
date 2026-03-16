@@ -1,17 +1,9 @@
-import json
 from functools import lru_cache
-from typing import Annotated, Literal, TypedDict
 
-from langchain_core.messages import (
-    BaseMessage,
-    SystemMessage,
-    trim_messages,
-)
+from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import create_react_agent
 
 from app.config import settings
 from app.logging_config import get_logger
@@ -21,10 +13,6 @@ log = get_logger("graph")
 
 # Maximum number of messages to keep in context (system + this many)
 _MAX_MESSAGES = 20
-
-
-class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
 
 
 # Cached singletons — built once at first request, reused for every subsequent call
@@ -47,18 +35,6 @@ def _llm() -> ChatOpenAI:
 @lru_cache(maxsize=1)
 def _tool():
     return get_retriever_tool()
-
-
-@lru_cache(maxsize=1)
-def _llm_with_tools():
-    return _llm().bind_tools([_tool()])
-
-
-def _should_continue(state: dict) -> Literal["tools", "__end__"]:
-    last = state["messages"][-1]
-    if hasattr(last, "tool_calls") and last.tool_calls:
-        return "tools"
-    return "__end__"
 
 
 # Legal search: retrieve then synthesize, no raw block dumping
@@ -97,89 +73,27 @@ After searching the document:
 Give clear, practical answers in plain language. Explain what the document says, what the law requires, any risks or implications, and recommended actions. Reference specific clauses (by block_id) and legal articles where relevant. Do not dump raw blocks. If neither tool returns useful content, say so and advise the user to consult qualified legal counsel."""
 
 
-def _trim(messages: list[BaseMessage], system: SystemMessage) -> list[BaseMessage]:
-    """Keep the system message + the most recent _MAX_MESSAGES non-system messages."""
-    non_system = [m for m in messages if not isinstance(m, SystemMessage)]
-    if len(non_system) > _MAX_MESSAGES:
-        # Always keep the first human message so the LLM has the original question
-        trimmed = trim_messages(
-            non_system,
-            max_tokens=_MAX_MESSAGES,
-            token_counter=len,  # count by message count, not tokens
-            strategy="last",
-            start_on="human",
-            include_system=False,
-        )
-    else:
-        trimmed = non_system
-    return [system, *trimmed]
+def build_graph(system_prompt: str):
+    """Build a react agent graph that streams tokens directly from the LLM.
 
-
-async def _agent_node(state: dict) -> dict:
-    messages = state["messages"]
-    log.info(
-        "agent step",
-        extra={"event": "agent_step", "message_count": len(messages), "phase": "invoke"},
+    create_react_agent uses astream internally, so graph.astream(..., stream_mode="messages")
+    yields AIMessageChunk objects for each LLM token rather than one complete AIMessage.
+    """
+    return create_react_agent(
+        model=_llm(),
+        tools=[_tool()],
+        prompt=SystemMessage(content=system_prompt),
+        checkpointer=MemorySaver(),
     )
 
-    # Extract existing system message or fall back to the search default.
-    # This preserves whatever persona was injected at thread creation time.
-    if messages and isinstance(messages[0], SystemMessage):
-        system = messages[0]
-    else:
-        system = SystemMessage(content=LEGAL_AGENT_SYSTEM)
 
-    messages_to_send = _trim(messages, system)
-    response = await _llm_with_tools().ainvoke(messages_to_send)
-
-    if getattr(response, "tool_calls", None):
-
-        def _tc_repr(tc):
-            name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
-            raw_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {})
-            if isinstance(raw_args, str):
-                try:
-                    raw_args = json.loads(raw_args) if raw_args else {}
-                except json.JSONDecodeError:
-                    raw_args = {"_raw": raw_args[:200]}
-            return {"name": name, "args": raw_args}
-
-        log.info(
-            "tool_calls",
-            extra={
-                "event": "tool_calls",
-                "phase": "retrieve",
-                "tool_calls": [_tc_repr(tc) for tc in response.tool_calls],
-            },
-        )
-    else:
-        log.info("agent responding", extra={"event": "agent_responding", "phase": "respond"})
-
-    return {"messages": [response]}
+_graphs: dict[str, object] = {}
 
 
-def build_graph():
-    tool_node = ToolNode([_tool()])
-
-    workflow = StateGraph(AgentState)
-    workflow.add_node("agent", _agent_node)
-    workflow.add_node("tools", tool_node)
-
-    workflow.add_edge(START, "agent")
-    workflow.add_conditional_edges("agent", _should_continue, {"tools": "tools", "__end__": END})
-    workflow.add_edge("tools", "agent")
-
-    return workflow.compile(checkpointer=MemorySaver())
-
-
-_graph: object | None = None
-
-
-def get_graph():
-    global _graph
-    if _graph is None:
-        _graph = build_graph()
-    return _graph
+def get_graph(system_prompt: str = LEGAL_AGENT_SYSTEM):
+    if system_prompt not in _graphs:
+        _graphs[system_prompt] = build_graph(system_prompt)
+    return _graphs[system_prompt]
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +107,7 @@ def get_graph():
 # ---------------------------------------------------------------------------
 
 
-def build_doc_graph(doc_id: str):
+def build_doc_graph(doc_id: str, system_prompt: str = DOC_CONSULTANT_SYSTEM):
     """Build a doc-consultant graph scoped to a single document.
 
     Each call creates a fresh graph with a Qdrant filter locked to *doc_id*,
@@ -201,61 +115,12 @@ def build_doc_graph(doc_id: str):
     The LLM and legal-knowledge tool are still cached singletons.
     """
     doc_tool = get_doc_blocks_retriever_tool(doc_id)
-    llm_with_doc_tools = _llm().bind_tools([_tool(), doc_tool])
-
-    async def _node(state: dict) -> dict:
-        messages = state["messages"]
-        log.info(
-            "doc agent step",
-            extra={"event": "doc_agent_step", "message_count": len(messages), "phase": "invoke"},
-        )
-        system = (
-            messages[0]
-            if messages and isinstance(messages[0], SystemMessage)
-            else SystemMessage(content=DOC_CONSULTANT_SYSTEM)
-        )
-        messages_to_send = _trim(messages, system)
-        response = await llm_with_doc_tools.ainvoke(messages_to_send)
-
-        if getattr(response, "tool_calls", None):
-
-            def _tc_repr(tc):
-                name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
-                raw_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {})
-                if isinstance(raw_args, str):
-                    try:
-                        raw_args = json.loads(raw_args) if raw_args else {}
-                    except json.JSONDecodeError:
-                        raw_args = {"_raw": raw_args[:200]}
-                return {"name": name, "args": raw_args}
-
-            log.info(
-                "doc_tool_calls",
-                extra={
-                    "event": "doc_tool_calls",
-                    "phase": "retrieve",
-                    "doc_id": doc_id,
-                    "tool_calls": [_tc_repr(tc) for tc in response.tool_calls],
-                },
-            )
-        else:
-            log.info(
-                "doc agent responding",
-                extra={"event": "doc_agent_responding", "phase": "respond", "doc_id": doc_id},
-            )
-
-        return {"messages": [response]}
-
-    tool_node = ToolNode([_tool(), doc_tool])
-
-    workflow = StateGraph(AgentState)
-    workflow.add_node("agent", _node)
-    workflow.add_node("tools", tool_node)
-    workflow.add_edge(START, "agent")
-    workflow.add_conditional_edges("agent", _should_continue, {"tools": "tools", "__end__": END})
-    workflow.add_edge("tools", "agent")
-
-    return workflow.compile(checkpointer=MemorySaver())
+    return create_react_agent(
+        model=_llm(),
+        tools=[_tool(), doc_tool],
+        prompt=SystemMessage(content=system_prompt),
+        checkpointer=MemorySaver(),
+    )
 
 
 # Cache of compiled doc graphs keyed by doc_id so repeat requests for the

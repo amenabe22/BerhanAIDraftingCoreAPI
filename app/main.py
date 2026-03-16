@@ -6,12 +6,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
 from app.api.v1.endpoints.drafting.compliance import router as compliance_router
 from app.graph import (
-    DOC_CONSULTANT_SYSTEM,
     LEGAL_ADVISOR_SYSTEM,
     LEGAL_AGENT_SYSTEM,
     get_doc_graph,
@@ -152,19 +151,9 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
     return citations
 
 
-def _is_new_thread(graph, thread_id: str) -> bool:
-    """Returns True if this thread has no prior checkpoint (i.e. first turn)."""
-    try:
-        state = graph.get_state({"configurable": {"thread_id": thread_id}})
-        return not state or not state.values.get("messages")
-    except Exception:
-        return True
-
-
 async def _stream_endpoint(
     request: ChatRequest,
     event_type: str,
-    system_prompt: str,
     graph,
     status_message: str = "Searching legal knowledge base…",
 ) -> StreamingResponse:
@@ -174,22 +163,12 @@ async def _stream_endpoint(
         extra={"event": event_type, "user_message": request.message, "thread_id": thread_id},
     )
 
-    # Only inject the SystemMessage on the very first turn of a thread.
-    # On follow-up turns the checkpointer already has the system message stored.
-    first_turn = _is_new_thread(graph, thread_id)
-    if first_turn:
-        initial_messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=request.message),
-        ]
-    else:
-        initial_messages = [HumanMessage(content=request.message)]
-
     async def event_stream():
         yield f"data: {json.dumps({'type': 'thread_id', 'thread_id': thread_id})}\n\n"
 
         config = {"configurable": {"thread_id": thread_id}}
-        inputs = {"messages": initial_messages}
+        # create_react_agent expects {"messages": [...]} as input
+        inputs = {"messages": [HumanMessage(content=request.message)]}
         tool_msg_buffers: dict[str, str] = {}
         status_sent = False
         token_count = 0
@@ -224,11 +203,12 @@ async def _stream_endpoint(
                     },
                 )
 
-                # Detect the moment the agent decides to call a tool and notify the client
+                # Detect the moment the agent decides to call a tool and notify the client.
+                # tool_calls arrive on an AIMessageChunk with tool_call_chunks populated.
                 if (
                     not status_sent
-                    and isinstance(chunk, AIMessage)
-                    and getattr(chunk, "tool_calls", None)
+                    and isinstance(chunk, AIMessageChunk)
+                    and getattr(chunk, "tool_call_chunks", None)
                     and node == "agent"
                 ):
                     status_sent = True
@@ -237,7 +217,13 @@ async def _stream_endpoint(
                 if isinstance(chunk, ToolMessage):
                     tid = getattr(chunk, "tool_call_id", None) or chunk.id or ""
                     tool_msg_buffers[tid] = tool_msg_buffers.get(tid, "") + (content or "")
-                elif content and node == "agent" and not isinstance(chunk, ToolMessage):
+                elif (
+                    isinstance(chunk, AIMessageChunk)
+                    and content
+                    and node == "agent"
+                    # Skip chunks that only carry tool call deltas — no text content
+                    and not getattr(chunk, "tool_call_chunks", None)
+                ):
                     token_count += 1
                     log.info(
                         "token_yielded",
@@ -247,7 +233,6 @@ async def _stream_endpoint(
                             "token_n": token_count,
                             "content_len": len(content),
                             "elapsed_s": round(elapsed, 3),
-                            # Log first 120 chars so you can see if it's a partial or full answer
                             "content_preview": content[:120],
                         },
                     )
@@ -284,14 +269,13 @@ async def _stream_endpoint(
 async def legal_search_stream(request: ChatRequest):
     """Streaming legal search: conversational answer synthesized from retrieved sources, with citations at the end."""
     try:
-        graph = get_graph()
+        graph = get_graph(_apply_language(LEGAL_AGENT_SYSTEM, request.language))
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     return await _stream_endpoint(
         request,
         event_type="legal_search_request",
-        system_prompt=_apply_language(LEGAL_AGENT_SYSTEM, request.language),
         graph=graph,
     )
 
@@ -300,14 +284,13 @@ async def legal_search_stream(request: ChatRequest):
 async def legal_agent_stream(request: ChatRequest):
     """Streaming legal consultant: advisory answers with citations at the end."""
     try:
-        graph = get_graph()
+        graph = get_graph(_apply_language(LEGAL_ADVISOR_SYSTEM, request.language))
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     return await _stream_endpoint(
         request,
         event_type="legal_agent_request",
-        system_prompt=_apply_language(LEGAL_ADVISOR_SYSTEM, request.language),
         graph=graph,
     )
 
@@ -329,7 +312,6 @@ async def doc_agent_stream(request: DocChatRequest):
             message=request.message, thread_id=request.thread_id, language=request.language
         ),
         event_type="doc_agent_request",
-        system_prompt=_apply_language(DOC_CONSULTANT_SYSTEM, request.language),
         graph=graph,
         status_message="Searching documents and legal knowledge base…",
     )

@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 
 os.environ.setdefault("OPENROUTER_API_KEY", "test-openrouter-key")
 os.environ.setdefault("COHERE_API_KEY", "test-cohere-key")
@@ -30,16 +30,21 @@ os.environ.setdefault("QDRANT_API_KEY", "test-qdrant-key")
 
 
 def _make_ai_token_chunk(content: str, node: str = "agent") -> tuple:
-    msg = AIMessage(content=content)
+    msg = AIMessageChunk(content=content)
     meta = {"langgraph_node": node}
     return (msg, meta)
 
 
 def _make_ai_tool_call_chunk(tool_call_id: str = "tc1", node: str = "agent") -> tuple:
-    msg = AIMessage(
+    msg = AIMessageChunk(
         content="",
-        tool_calls=[
-            {"id": tool_call_id, "name": "search_legal_knowledge", "args": {"query": "contract"}}
+        tool_call_chunks=[
+            {
+                "id": tool_call_id,
+                "name": "search_legal_knowledge",
+                "args": '{"query":"contract"}',
+                "index": 0,
+            }
         ],
     )
     meta = {"langgraph_node": node}

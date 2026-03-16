@@ -1,22 +1,21 @@
 """Main ingestion service for processing and storing documents."""
 
-from typing import List, Dict, Any, Optional
-from uuid import UUID
+import json
 from datetime import datetime
-from app.services.ingestion.html_parser import HTMLParser
+from typing import Any
+from uuid import UUID
+
+from app.database.connection import get_db
+from app.models.document import Document, DocumentStatus
 from app.services.ingestion.chunker import Chunker
+from app.services.ingestion.html_parser import HTMLParser
+from app.utils.logger import get_logger
+from app.utils.section_utils import generate_synonyms, normalize_text
 from app.vector_store.embeddings import get_embedding
 from app.vector_store.qdrant_client import (
     ensure_collection,
     upsert_block_embedding,
-    get_collection_name,
 )
-from app.database.connection import get_db
-from app.models.document import Document, DocumentStatus
-from app.models.block import Block
-from app.utils.logger import get_logger
-from app.utils.section_utils import normalize_text, generate_synonyms
-import json
 
 logger = get_logger(__name__)
 
@@ -38,9 +37,9 @@ class IngestionService:
     async def ingest_document(
         self,
         doc_id: UUID,
-        sections: List[Dict[str, Any]],
-        collection_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        sections: list[dict[str, Any]],
+        collection_name: str | None = None,
+    ) -> dict[str, Any]:
         """
         Ingest a document with sections.
 
@@ -60,7 +59,7 @@ class IngestionService:
 
             # Ensure Qdrant collection exists and get collection name
             coll_name = await ensure_collection(doc_id=doc_id, collection_name=collection_name)
-            
+
             # Ensure document record exists
             document = await self._ensure_document(doc_id, coll_name)
 
@@ -75,7 +74,7 @@ class IngestionService:
                 if section_id and section_title:
                     norm_title = normalize_text(section_title)
                     section_index[norm_title] = section_id
-            
+
             # Store section_index in document record (gracefully handle if column doesn't exist yet)
             if section_index:
                 try:
@@ -91,7 +90,9 @@ class IngestionService:
                 except Exception as e:
                     # Gracefully handle if section_index column doesn't exist (migration not run yet)
                     if "section_index" in str(e).lower() or "does not exist" in str(e).lower():
-                        logger.warning(f"[INGEST] section_index column not found. Run migration 003_add_section_index_to_documents. Continuing without section_index.")
+                        logger.warning(
+                            "[INGEST] section_index column not found. Run migration 003_add_section_index_to_documents. Continuing without section_index."
+                        )
                     else:
                         # Re-raise if it's a different error
                         raise
@@ -111,23 +112,23 @@ class IngestionService:
                         section_type = chunk.get("section_type", "")
                         section_title = chunk.get("section_title")  # From parsed section
                         plain_text = chunk.get("plain_text", "")
-                        
+
                         # Build embedding text with section context
                         embedding_parts = []
-                        
+
                         # Include section title if available (helps with section-specific searches)
                         if section_title:
                             embedding_parts.append(section_title)
-                        
+
                         # Include section_id for better cross-language matching
                         # Section IDs are always in English, so they help bridge language gaps
                         if section_id:
                             embedding_parts.append(f"Section: {section_id}")
-                        
+
                         # Include section_type for context
                         if section_type:
                             embedding_parts.append(f"Type: {section_type}")
-                        
+
                         # Add the actual content
                         if plain_text:
                             embedding_parts.append(plain_text)
@@ -135,15 +136,15 @@ class IngestionService:
                             # For minimal/empty sections, at least include section_id
                             # This ensures they can be found even with no content
                             embedding_parts.append(f"Section {section_id}")
-                        
+
                         embedding_text = " ".join(embedding_parts)
-                        
+
                         # Generate embedding with enhanced text
                         embedding = await get_embedding(embedding_text)
 
                         # Generate section synonyms
                         section_synonyms = generate_synonyms(section_title) if section_title else []
-                        
+
                         # Prepare payload for Qdrant (include section_title and section_synonyms for metadata filtering)
                         payload = {
                             "doc_id": str(doc_id),
@@ -184,7 +185,9 @@ class IngestionService:
                         global_chunk_index += 1
 
                     except Exception as e:
-                        logger.error(f"Failed to process chunk {chunk.get('chunk_id')}: {e}", exc_info=True)
+                        logger.error(
+                            f"Failed to process chunk {chunk.get('chunk_id')}: {e}", exc_info=True
+                        )
                         # Continue with other chunks
                         continue
 
@@ -207,6 +210,7 @@ class IngestionService:
 
         except Exception as e:
             from app.utils.error_handler import is_ssl_error
+
             if is_ssl_error(e):
                 logger.error(f"Failed to ingest document {doc_id}: SSL connection error")
             else:
@@ -321,11 +325,11 @@ class IngestionService:
         block_id: UUID,
         new_html: str,
         new_plain_text: str,
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
     ) -> None:
         """
         Re-embed a block after edit, preserving metadata.
-        
+
         Args:
             doc_id: Document UUID
             block_id: Block UUID
@@ -335,35 +339,36 @@ class IngestionService:
         """
         try:
             # Get existing block metadata from Qdrant to preserve section info
-            from app.vector_store.qdrant_client import get_qdrant_client, get_collection_name
+            from app.vector_store.qdrant_client import get_collection_name, get_qdrant_client
+
             client = await get_qdrant_client()
             coll_name = get_collection_name(doc_id=doc_id, collection_name=collection_name)
-            
+
             # Retrieve existing point to get metadata
             try:
                 points = await client.retrieve(
                     collection_name=coll_name,
                     ids=[str(block_id)],
                 )
-                
+
                 existing_payload = {}
                 if points and len(points) > 0:
                     # Handle both list and single point response
                     point = points[0] if isinstance(points, list) else points
-                    if hasattr(point, 'payload'):
+                    if hasattr(point, "payload"):
                         existing_payload = point.payload or {}
                     elif isinstance(point, dict):
-                        existing_payload = point.get('payload', {})
+                        existing_payload = point.get("payload", {})
             except Exception as e:
                 logger.warning(f"Could not retrieve existing block metadata: {e}, using defaults")
                 existing_payload = {}
-            
+
             # Preserve section metadata
             section_id = existing_payload.get("section_id", "")
             section_type = existing_payload.get("section_type", "")
             section_title = existing_payload.get("section_title")
             section_synonyms = existing_payload.get("section_synonyms", [])
-            
+
             # Build embedding text with section context (same as ingestion)
             embedding_parts = []
             if section_title:
@@ -376,12 +381,12 @@ class IngestionService:
                 embedding_parts.append(new_plain_text)
             elif not section_title:
                 embedding_parts.append(f"Section {section_id}")
-            
+
             embedding_text = " ".join(embedding_parts)
-            
+
             # Generate new embedding
             embedding = await get_embedding(embedding_text)
-            
+
             # Prepare payload (preserve all metadata)
             payload = {
                 "doc_id": str(doc_id),
@@ -395,7 +400,7 @@ class IngestionService:
                 "html": new_html,
                 "plain_text": new_plain_text,
             }
-            
+
             # Upsert to Qdrant
             await upsert_block_embedding(
                 doc_id=doc_id,
@@ -404,14 +409,14 @@ class IngestionService:
                 payload=payload,
                 collection_name=collection_name,
             )
-            
+
             # Update block in Postgres
             async for db in get_db():
                 await db.execute(
                     """
-                    UPDATE blocks 
-                    SET html = $1, 
-                        plain_text = $2, 
+                    UPDATE blocks
+                    SET html = $1,
+                        plain_text = $2,
                         version = version + 1,
                         last_modified_at = $3,
                         last_modified_by = $4
@@ -425,9 +430,9 @@ class IngestionService:
                     doc_id,
                 )
                 break
-            
+
             logger.info(f"[PERSIST] re-embed_complete block_id={block_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to re-embed block {block_id}: {e}", exc_info=True)
             raise

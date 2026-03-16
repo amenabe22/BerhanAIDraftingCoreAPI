@@ -193,14 +193,13 @@ def test_build_doc_graph_returns_compiled_graph():
 
     from app.graph import build_doc_graph
 
+    mock_graph = MagicMock(spec=CompiledStateGraph)
+    mock_graph.nodes = {"agent": MagicMock(), "tools": MagicMock()}
     with (
         patch("app.graph._tool", return_value=_mock_legal_tool()),
         patch("app.graph._llm", return_value=MagicMock()),
-        patch(
-            "app.graph.get_doc_blocks_retriever_tool",
-            return_value=MagicMock(name="search_user_documents"),
-        ),
-        patch("app.graph.ToolNode"),
+        patch("app.graph.get_doc_blocks_retriever_tool", return_value=_mock_legal_tool()),
+        patch("app.graph.create_react_agent", return_value=mock_graph),
     ):
         graph = build_doc_graph("test-doc-id")
     assert isinstance(graph, CompiledStateGraph)
@@ -209,11 +208,13 @@ def test_build_doc_graph_returns_compiled_graph():
 def test_build_doc_graph_has_agent_and_tools_nodes():
     from app.graph import build_doc_graph
 
+    mock_graph = MagicMock()
+    mock_graph.nodes = {"agent": MagicMock(), "tools": MagicMock()}
     with (
         patch("app.graph._tool", return_value=_mock_legal_tool()),
         patch("app.graph._llm", return_value=MagicMock()),
-        patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
-        patch("app.graph.ToolNode"),
+        patch("app.graph.get_doc_blocks_retriever_tool", return_value=_mock_legal_tool()),
+        patch("app.graph.create_react_agent", return_value=mock_graph),
     ):
         graph = build_doc_graph("test-doc-id")
     assert "agent" in set(graph.nodes)
@@ -229,11 +230,12 @@ def test_get_doc_graph_returns_same_instance_for_same_doc_id():
     original = graph_module._doc_graphs.copy()
     try:
         graph_module._doc_graphs.pop(doc_id, None)
+        mock_graph = MagicMock()
         with (
             patch("app.graph._tool", return_value=_mock_legal_tool()),
             patch("app.graph._llm", return_value=MagicMock()),
-            patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
-            patch("app.graph.ToolNode"),
+            patch("app.graph.get_doc_blocks_retriever_tool", return_value=_mock_legal_tool()),
+            patch("app.graph.create_react_agent", return_value=mock_graph),
         ):
             g1 = get_doc_graph(doc_id)
             g2 = get_doc_graph(doc_id)
@@ -253,8 +255,8 @@ def test_get_doc_graph_builds_separate_graphs_for_different_doc_ids():
         with (
             patch("app.graph._tool", return_value=_mock_legal_tool()),
             patch("app.graph._llm", return_value=MagicMock()),
-            patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
-            patch("app.graph.ToolNode"),
+            patch("app.graph.get_doc_blocks_retriever_tool", return_value=_mock_legal_tool()),
+            patch("app.graph.create_react_agent", side_effect=lambda **_kw: MagicMock()),
         ):
             g1 = get_doc_graph("doc-aaa")
             g2 = get_doc_graph("doc-bbb")

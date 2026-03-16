@@ -1,102 +1,95 @@
 """
-Unit tests for _trim() and _is_new_thread() in graph.py / main.py.
+Unit tests for graph/main utilities that still exist after the streaming refactor.
+
+- _apply_language: system-prompt language prefixing (main.py)
+- _parse_citations: citation extraction from ToolMessages (main.py)
 """
 
-from unittest.mock import MagicMock
+from langchain_core.messages import ToolMessage
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
-from app.graph import _MAX_MESSAGES, LEGAL_AGENT_SYSTEM, _trim
-from app.main import _is_new_thread
+from app.main import _apply_language
 
 # ---------------------------------------------------------------------------
-# _trim tests
+# _apply_language
 # ---------------------------------------------------------------------------
 
 
-def _sys() -> SystemMessage:
-    return SystemMessage(content=LEGAL_AGENT_SYSTEM)
+def test_apply_language_none_uses_auto_detect():
+    result = _apply_language("BASE PROMPT", None)
+    assert result.startswith("LANGUAGE: Detect")
+    assert "BASE PROMPT" in result
 
 
-def _human(n: int = 1) -> HumanMessage:
-    return HumanMessage(content=f"human {n}")
+def test_apply_language_amharic():
+    result = _apply_language("BASE", "am")
+    assert "Amharic" in result
+    assert "BASE" in result
 
 
-def _ai(n: int = 1) -> AIMessage:
-    return AIMessage(content=f"ai {n}")
+def test_apply_language_english():
+    result = _apply_language("BASE", "en")
+    assert "English" in result
 
 
-def test_trim_preserves_system_message_first():
-    msgs = [_sys(), _human(1), _ai(1)]
-    result = _trim(msgs, _sys())
-    assert isinstance(result[0], SystemMessage)
+def test_apply_language_oromo():
+    result = _apply_language("BASE", "om")
+    assert "Oromoo" in result
 
 
-def test_trim_below_limit_unchanged():
-    msgs = [_sys()] + [_human(i) for i in range(5)] + [_ai(i) for i in range(5)]
-    result = _trim(msgs, _sys())
-    # System + 10 non-system messages, well below _MAX_MESSAGES=20
-    assert len(result) == 11
-
-
-def test_trim_above_limit_cuts_to_max():
-    # Build 25 non-system messages (exceeds _MAX_MESSAGES=20)
-    non_sys = []
-    for i in range(13):
-        non_sys.append(_human(i))
-        non_sys.append(_ai(i))
-    # 26 messages total; trim should cut to _MAX_MESSAGES=20 starting on human
-    msgs = [_sys()] + non_sys
-    result = _trim(msgs, _sys())
-    # First message must be the system message
-    assert isinstance(result[0], SystemMessage)
-    # Must not exceed system + _MAX_MESSAGES
-    assert len(result) <= _MAX_MESSAGES + 1
-
-
-def test_trim_strips_extra_system_messages():
-    """If state somehow has two system messages, trim should not include them."""
-    msgs = [_sys(), _sys(), _human(1), _ai(1)]
-    result = _trim(msgs, _sys())
-    system_count = sum(1 for m in result if isinstance(m, SystemMessage))
-    assert system_count == 1
-
-
-def test_trim_result_starts_with_injected_system():
-    custom_sys = SystemMessage(content="custom persona")
-    msgs = [_human(1), _ai(1)]
-    result = _trim(msgs, custom_sys)
-    assert result[0].content == "custom persona"
+def test_apply_language_instruction_is_before_prompt():
+    result = _apply_language("BASE PROMPT", None)
+    lang_pos = result.index("LANGUAGE:")
+    prompt_pos = result.index("BASE PROMPT")
+    assert lang_pos < prompt_pos
 
 
 # ---------------------------------------------------------------------------
-# _is_new_thread tests
+# _parse_citations (via main.py)
 # ---------------------------------------------------------------------------
 
 
-def test_is_new_thread_true_when_no_messages():
-    graph = MagicMock()
-    state = MagicMock()
-    state.values = {"messages": []}
-    graph.get_state.return_value = state
-    assert _is_new_thread(graph, "some-thread-id") is True
+from app.main import _parse_citations  # noqa: E402
+
+CITATION_BLOCK = (
+    "[Source: english-civil-code-1960 | Article 1675 | Art. 1675. Contract defined.]\n"
+    "A contract is an agreement whereby two or more persons create, vary or extinguish obligations."
+)
+
+DOC_BLOCK = (
+    "[Doc: doc-abc | Block: b01 | Type: paragraph]\n"
+    "The tenant agrees to pay rent on the first of each month."
+)
 
 
-def test_is_new_thread_false_when_messages_exist():
-    graph = MagicMock()
-    state = MagicMock()
-    state.values = {"messages": [HumanMessage(content="hi")]}
-    graph.get_state.return_value = state
-    assert _is_new_thread(graph, "some-thread-id") is False
+def test_parse_citations_extracts_source_block():
+    tm = ToolMessage(content=CITATION_BLOCK, tool_call_id="t1")
+    citations = _parse_citations([tm])
+    assert len(citations) == 1
+    assert citations[0]["document_id"] == "english-civil-code-1960"
+    assert citations[0]["item_id"] == "1675"
+    assert "Contract defined" in citations[0]["title"]
 
 
-def test_is_new_thread_true_on_exception():
-    graph = MagicMock()
-    graph.get_state.side_effect = Exception("checkpointer error")
-    assert _is_new_thread(graph, "bad-thread") is True
+def test_parse_citations_extracts_doc_block():
+    tm = ToolMessage(content=DOC_BLOCK, tool_call_id="t2")
+    citations = _parse_citations([tm])
+    assert len(citations) == 1
+    assert citations[0]["doc_id"] == "doc-abc"
+    assert citations[0]["block_id"] == "b01"
+    assert citations[0]["type"] == "paragraph"
 
 
-def test_is_new_thread_true_when_state_is_none():
-    graph = MagicMock()
-    graph.get_state.return_value = None
-    assert _is_new_thread(graph, "some-id") is True
+def test_parse_citations_deduplicates():
+    tm1 = ToolMessage(content=CITATION_BLOCK, tool_call_id="t1")
+    tm2 = ToolMessage(content=CITATION_BLOCK, tool_call_id="t2")
+    citations = _parse_citations([tm1, tm2])
+    assert len(citations) == 1
+
+
+def test_parse_citations_empty_input():
+    assert _parse_citations([]) == []
+
+
+def test_parse_citations_non_citation_content_ignored():
+    tm = ToolMessage(content="This is a plain answer with no source blocks.", tool_call_id="t1")
+    assert _parse_citations([tm]) == []
