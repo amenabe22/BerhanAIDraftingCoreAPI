@@ -1,4 +1,5 @@
 import json
+import time as _time
 import uuid
 from enum import Enum
 from pathlib import Path
@@ -191,6 +192,13 @@ async def _stream_endpoint(
         inputs = {"messages": initial_messages}
         tool_msg_buffers: dict[str, str] = {}
         status_sent = False
+        token_count = 0
+        stream_start = _time.perf_counter()
+
+        log.info(
+            "stream_start",
+            extra={"event": "stream_start", "thread_id": thread_id},
+        )
 
         try:
             async for chunk, meta in graph.astream(
@@ -200,6 +208,21 @@ async def _stream_endpoint(
             ):
                 node = meta.get("langgraph_node", "") if isinstance(meta, dict) else ""
                 content = getattr(chunk, "content", None)
+                chunk_type = type(chunk).__name__
+                elapsed = _time.perf_counter() - stream_start
+
+                log.debug(
+                    "stream_chunk_received",
+                    extra={
+                        "event": "stream_chunk_received",
+                        "thread_id": thread_id,
+                        "node": node,
+                        "chunk_type": chunk_type,
+                        "content_len": len(content) if content else 0,
+                        "has_tool_calls": bool(getattr(chunk, "tool_calls", None)),
+                        "elapsed_s": round(elapsed, 3),
+                    },
+                )
 
                 # Detect the moment the agent decides to call a tool and notify the client
                 if (
@@ -215,6 +238,19 @@ async def _stream_endpoint(
                     tid = getattr(chunk, "tool_call_id", None) or chunk.id or ""
                     tool_msg_buffers[tid] = tool_msg_buffers.get(tid, "") + (content or "")
                 elif content and node == "agent" and not isinstance(chunk, ToolMessage):
+                    token_count += 1
+                    log.info(
+                        "token_yielded",
+                        extra={
+                            "event": "token_yielded",
+                            "thread_id": thread_id,
+                            "token_n": token_count,
+                            "content_len": len(content),
+                            "elapsed_s": round(elapsed, 3),
+                            # Log first 120 chars so you can see if it's a partial or full answer
+                            "content_preview": content[:120],
+                        },
+                    )
                     yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
 
         except Exception as exc:
