@@ -2,6 +2,7 @@
 
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.documents import Document
@@ -29,6 +30,20 @@ from app.services.drafting.knowledge_retrieval import (
 )
 
 log = get_logger("compliance_agent")
+
+
+def _emit_progress(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    *,
+    phase: str,
+    percent: int,
+    message: str,
+) -> None:
+    if progress_callback is None:
+        return
+    p = max(0, min(100, percent))
+    progress_callback({"phase": phase, "percent": p, "message": message})
+
 
 # Checklist for the analysis prompt (reduce missed issues)
 COMPLIANCE_CHECKLIST = """
@@ -323,8 +338,12 @@ class ComplianceAnalysisAgent:
         language: str = "en",
         document_type: str | None = None,
         check_level: str = "quick",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ComplianceAnalysisResponse:
-        """Run full pipeline and return ComplianceAnalysisResponse. If document_blocks (e.g. from Qdrant) is provided, use it for full_text and block context (block_id, type). check_level (quick/standard/deep) controls context and citation depth."""
+        """Run full pipeline and return ComplianceAnalysisResponse. If document_blocks (e.g. from Qdrant) is provided, use it for full_text and block context (block_id, type). check_level (quick/standard/deep) controls context and citation depth.
+
+        If progress_callback is set, it is invoked with ``{"phase": str, "percent": int, "message": str}`` at coarse pipeline boundaries (and during per-clause citation when applicable). Percent is approximate (0–100).
+        """
         if document_blocks:
             blocks = document_blocks
             full_text = "\n\n".join(b.get("text", "") for b in blocks if b.get("text"))
@@ -333,6 +352,12 @@ class ComplianceAnalysisAgent:
             blocks = extract_blocks_from_tiptap(tiptap_json) if tiptap_json else []
         if not full_text:
             raise ValueError("No document text to analyze")
+        _emit_progress(
+            progress_callback,
+            phase="prepare",
+            percent=5,
+            message="Document loaded; starting compliance check",
+        )
         limits = get_compliance_limits(check_level)
         doc_type = document_type or _detect_document_type(full_text)
         summary_for_queries = full_text[:500]
@@ -341,6 +366,12 @@ class ComplianceAnalysisAgent:
         queries = generate_targeted_queries(doc_type, summary_for_queries)
         if not queries:
             queries = [f"Ethiopian law {doc_type}"]
+        _emit_progress(
+            progress_callback,
+            phase="queries",
+            percent=15,
+            message="Generated search queries for legal knowledge",
+        )
 
         # 2) Optional source filter (use all sources for now; can add LLM pick later)
         source_filter: list[str] | None = None
@@ -353,9 +384,21 @@ class ComplianceAnalysisAgent:
             top_k_per_query=limits["top_k_per_query"],
             rrf_top_k=limits["initial_limit"],
         )
+        _emit_progress(
+            progress_callback,
+            phase="retrieve",
+            percent=32,
+            message="Retrieved relevant legal sources",
+        )
         reranked = rerank_with_llm(queries[0], retrieved, limits["rerank_top"])
         legal_context = _format_legal_context(reranked)
         global_citations = _docs_to_citations(reranked)
+        _emit_progress(
+            progress_callback,
+            phase="rerank",
+            percent=40,
+            message="Ranked sources for analysis context",
+        )
 
         # 4) Main LLM analysis (level-specific prompt truncation)
         model = settings.COMPLIANCE_ANALYSIS_MODEL or settings.GEMINI_MODEL
@@ -378,6 +421,12 @@ class ComplianceAnalysisAgent:
             block_char_limit=limits["block_char_limit"],
             legal_context_limit=limits["legal_context_limit"],
         )
+        _emit_progress(
+            progress_callback,
+            phase="analyze",
+            percent=42,
+            message="Analyzing document against Ethiopian law (this step may take a while)",
+        )
         response = llm.invoke(prompt)
         raw = response.content if hasattr(response, "content") else str(response)
         try:
@@ -386,6 +435,12 @@ class ComplianceAnalysisAgent:
             log.error("compliance_parse_error", extra={"error": str(e), "raw_preview": raw[:500]})
             raise ValueError("LLM did not return valid JSON") from e
 
+        _emit_progress(
+            progress_callback,
+            phase="parse",
+            percent=68,
+            message="Parsed analysis results",
+        )
         data = _validate_and_dedupe(data)
         # Fallback: if LLM returned no clauses but we have blocks with text, derive minimal clauses so response isn't empty
         if not (data.get("clauses") or []) and blocks:
@@ -399,6 +454,15 @@ class ComplianceAnalysisAgent:
         # 5) Per-clause citations for non-LOW risk clauses with implications (level-specific)
         max_clauses_citations = limits["max_clauses_citations"]
         clauses_with_citations = 0
+        citation_budget = min(
+            max_clauses_citations,
+            sum(
+                1
+                for c in (data.get("clauses", []) or [])
+                if (c.get("risk_level") or "").upper() != "LOW"
+                and (c.get("implications") or "").strip()
+            ),
+        )
         for c in data.get("clauses", []) or []:
             if clauses_with_citations >= max_clauses_citations:
                 break
@@ -431,6 +495,14 @@ class ComplianceAnalysisAgent:
             per_reranked = rerank_with_llm(query, per_docs, limits["per_clause_rerank_k"])
             c["citations"] = [cit.model_dump() for cit in _docs_to_citations(per_reranked)]
             clauses_with_citations += 1
+            if citation_budget > 0 and progress_callback is not None:
+                sub = 70 + int(24 * clauses_with_citations / citation_budget)
+                _emit_progress(
+                    progress_callback,
+                    phase="clause_citations",
+                    percent=sub,
+                    message=f"Resolved citations for clause {clauses_with_citations} of {citation_budget}",
+                )
 
         # 6) Build issues_by_block_id and critical_issues
         issues = data.get("issues", []) or []
@@ -495,6 +567,13 @@ class ComplianceAnalysisAgent:
                 block_id=i.get("block_id"),
                 citations=_filter_citations(i.get("citations", [])),
             )
+
+        _emit_progress(
+            progress_callback,
+            phase="finalize",
+            percent=96,
+            message="Computing risk scores and assembling response",
+        )
 
         def to_clause(c: dict) -> ClauseAnalysis:
             return ClauseAnalysis(

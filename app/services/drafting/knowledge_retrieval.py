@@ -1,8 +1,6 @@
 """Targeted legal knowledge retrieval for compliance: query gen, search + RRF, LLM rerank."""
 
 import re
-from functools import lru_cache
-from typing import Any
 
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
@@ -91,7 +89,10 @@ Output only these two lines, no other text."""
             )
         return result or ""
     except Exception as e:
-        log.warning("build_clause_legal_query failed", extra={"event": "clause_query_error", "error": str(e)})
+        log.warning(
+            "build_clause_legal_query failed",
+            extra={"event": "clause_query_error", "error": str(e)},
+        )
         return ""
 
 
@@ -100,8 +101,8 @@ def generate_targeted_queries(doc_type: str, summary: str) -> list[str]:
     llm = _compliance_llm()
     prompt = f"""You are helping to find relevant Ethiopian law for a compliance analysis.
 
-Document type: {doc_type or 'unknown'}
-Document summary (first part): {summary[:800] if summary else 'N/A'}
+Document type: {doc_type or "unknown"}
+Document summary (first part): {summary[:800] if summary else "N/A"}
 
 Output exactly 2 to 4 short search queries that would find the most relevant Ethiopian legal provisions (Civil Code, proclamations, regulations) for this document. Each query should be one line, specific (e.g. "Ethiopian Civil Code contract liability limitation", "Labour Proclamation termination notice"). Output ONLY the queries, one per line, no numbering or bullets."""
     response = llm.invoke(prompt)
@@ -112,7 +113,12 @@ Output exactly 2 to 4 short search queries that would find the most relevant Eth
         queries = [f"Ethiopian law {doc_type or 'contract'} compliance"]
     log.info(
         "targeted_queries",
-        extra={"event": "compliance_queries", "doc_type": doc_type, "count": len(queries), "queries": queries},
+        extra={
+            "event": "compliance_queries",
+            "doc_type": doc_type,
+            "count": len(queries),
+            "queries": queries,
+        },
     )
     return queries
 
@@ -122,11 +128,11 @@ def _doc_key(doc: Document) -> tuple[str, str]:
     m = getattr(doc, "metadata", None) or {}
     nested = m.get("metadata") if isinstance(m.get("metadata"), dict) else {}
     doc_id = (
-        (m.get("document_id") or nested.get("document_id") or m.get("source_file") or m.get("source")) or ""
-    )
+        m.get("document_id") or nested.get("document_id") or m.get("source_file") or m.get("source")
+    ) or ""
     item_id = (
-        (m.get("item_id") or nested.get("item_id") or m.get("article_id") or m.get("article_number")) or ""
-    )
+        m.get("item_id") or nested.get("item_id") or m.get("article_id") or m.get("article_number")
+    ) or ""
     return (str(doc_id), str(item_id))
 
 
@@ -198,7 +204,11 @@ def rerank_with_llm(query: str, chunks: list[Document], top_k: int) -> list[Docu
     if len(chunks) <= top_k:
         return chunks
 
-    model = settings.COMPLIANCE_RERANKER_MODEL or settings.COMPLIANCE_ANALYSIS_MODEL or settings.GEMINI_MODEL
+    model = (
+        settings.COMPLIANCE_RERANKER_MODEL
+        or settings.COMPLIANCE_ANALYSIS_MODEL
+        or settings.GEMINI_MODEL
+    )
     llm = _compliance_llm(model=model)
 
     # Number chunks 1..n for LLM to reference
@@ -254,15 +264,24 @@ def get_available_source_files() -> list[str]:
             )
             for p in points or []:
                 payload = p.payload or {}
-                doc_id = payload.get("document_id") or payload.get("source_file") or payload.get("source")
+                doc_id = (
+                    payload.get("document_id")
+                    or payload.get("source_file")
+                    or payload.get("source")
+                )
                 if doc_id and isinstance(doc_id, str):
                     seen.add(doc_id.strip())
             if offset is None:
                 break
     except Exception as e:
-        log.warning("get_available_source_files failed", extra={"event": "sources_error", "error": str(e)})
+        log.warning(
+            "get_available_source_files failed", extra={"event": "sources_error", "error": str(e)}
+        )
         return []
 
     _available_sources_cache = sorted(seen)
-    log.info("available_sources", extra={"event": "sources_loaded", "count": len(_available_sources_cache)})
+    log.info(
+        "available_sources",
+        extra={"event": "sources_loaded", "count": len(_available_sources_cache)},
+    )
     return _available_sources_cache

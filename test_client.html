@@ -50,6 +50,11 @@
     .lang-row label { margin: 0; font-size: 0.8rem; color: #64748b; white-space: nowrap; }
     .lang-select { padding: 0.35rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.8rem; background: white; color: #1e293b; cursor: pointer; }
     .lang-select:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
+    /* Compliance stream progress */
+    .compliance-progress-wrap { margin-top: 0.5rem; display: none; }
+    .compliance-progress-track { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+    .compliance-progress-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #3b82f6); width: 0%; border-radius: 4px; transition: width 0.25s ease-out; }
+    .compliance-progress-meta { font-size: 0.75rem; color: #64748b; margin-top: 0.35rem; }
   </style>
 </head>
 <body>
@@ -159,8 +164,8 @@
 
   <!-- Compliance Analysis -->
   <section>
-    <h2>POST /drafting/compliance/analyze</h2>
-    <p class="desc">Run compliance analysis against Ethiopian law using a document from the doc collection. Document is loaded by doc_id so block_id and type are available for context and citations.</p>
+    <h2>POST /drafting/compliance/analyze-stream</h2>
+    <p class="desc">Same as sync <code>/analyze</code>, but streams Server-Sent Events: progress (phase + approximate %), then the full result. Lets you see retrieval, main analysis, and per-clause citation steps while they run.</p>
     <label>Document ID <span style="color:#b91c1c">*</span></label>
     <input type="text" id="complianceDocId" placeholder="e.g. 8749c6dc-4bb3-4f5c-b593-ae54d0da5437" style="width:100%; max-width:400px;" />
     <div class="lang-row">
@@ -182,7 +187,11 @@
     <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
       <button type="button" id="complianceBtn">Analyze</button>
     </div>
-    <div id="complianceStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="complianceStatusMsg">Analyzing compliance…</span></div>
+    <div id="complianceStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="complianceStatusMsg">Starting…</span></div>
+    <div id="complianceProgressWrap" class="compliance-progress-wrap">
+      <div class="compliance-progress-track"><div id="complianceProgressFill" class="compliance-progress-fill"></div></div>
+      <div id="complianceProgressMeta" class="compliance-progress-meta"></div>
+    </div>
     <div id="complianceResult" class="answer" style="display:none;"></div>
   </section>
 
@@ -430,6 +439,26 @@
       containerEl.innerHTML = html;
     }
 
+    function setComplianceProgressUI(percent, phase, message) {
+      const wrap = document.getElementById('complianceProgressWrap');
+      const fill = document.getElementById('complianceProgressFill');
+      const meta = document.getElementById('complianceProgressMeta');
+      const msgEl = document.getElementById('complianceStatusMsg');
+      wrap.style.display = 'block';
+      const p = Math.max(0, Math.min(100, Number(percent) || 0));
+      fill.style.width = p + '%';
+      const phasePretty = phase ? String(phase).replace(/_/g, ' ') : '';
+      msgEl.textContent = p + '%' + (phasePretty ? ' · ' + phasePretty : '');
+      meta.textContent = message ? String(message) : '';
+    }
+
+    function resetComplianceStreamUI() {
+      document.getElementById('complianceProgressWrap').style.display = 'none';
+      document.getElementById('complianceProgressFill').style.width = '0%';
+      document.getElementById('complianceProgressMeta').textContent = '';
+      document.getElementById('complianceStatusMsg').textContent = 'Starting…';
+    }
+
     document.getElementById('complianceBtn').addEventListener('click', async () => {
       const btn = document.getElementById('complianceBtn');
       const resultEl = document.getElementById('complianceResult');
@@ -442,29 +471,79 @@
       }
       btn.disabled = true;
       resultEl.style.display = 'block';
-      resultEl.innerHTML = '<span style="color:#94a3b8">…</span>';
+      resultEl.innerHTML = '<span style="color:#94a3b8">Waiting for progress events…</span>';
+      resetComplianceStreamUI();
       statusBar.style.display = 'flex';
+      let gotResult = false;
+      let streamError = false;
       try {
         const body = {
           doc_id: docId,
           language: document.getElementById('complianceLang').value || 'en',
           check_level: document.getElementById('complianceCheckLevel').value || 'quick',
         };
-        const r = await fetch(baseUrl() + '/drafting/compliance/analyze', {
+        const r = await fetch(baseUrl() + '/drafting/compliance/analyze-stream', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'text/event-stream',
+          },
           body: JSON.stringify(body),
         });
-        statusBar.style.display = 'none';
-        const data = await r.json().catch(() => null);
-        if (!r.ok) {
-          resultEl.innerHTML = '<span style="color:#b91c1c">Error: ' + (data && data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : r.status + ' ' + r.statusText).replace(/</g, '&lt;') + '</span>';
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (!r.ok || ct.indexOf('text/event-stream') === -1) {
+          resetComplianceStreamUI();
+          statusBar.style.display = 'none';
+          let err = r.status + ' ' + r.statusText;
+          try {
+            const b = await r.json();
+            if (b.detail) err = typeof b.detail === 'string' ? b.detail : JSON.stringify(b.detail);
+          } catch (_) {}
+          resultEl.innerHTML = '<span style="color:#b91c1c">Error: ' + String(err).replace(/</g, '&lt;') + '</span>';
           btn.disabled = false;
           return;
         }
-        renderComplianceResult(resultEl, data);
+
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() || '';
+          for (const chunk of chunks) {
+            const dataLine = chunk.split('\n').find(function (l) { return l.startsWith('data: '); });
+            if (!dataLine) continue;
+            try {
+              const data = JSON.parse(dataLine.slice(6));
+              if (data.type === 'progress') {
+                setComplianceProgressUI(data.percent, data.phase, data.message);
+              } else if (data.type === 'result' && data.data) {
+                gotResult = true;
+                statusBar.style.display = 'none';
+                resetComplianceStreamUI();
+                renderComplianceResult(resultEl, data.data);
+              } else if (data.type === 'error') {
+                streamError = true;
+                statusBar.style.display = 'none';
+                resetComplianceStreamUI();
+                resultEl.innerHTML = '<span style="color:#b91c1c">Error: ' + String(data.message || 'Unknown error').replace(/</g, '&lt;') + '</span>';
+              }
+            } catch (_) {}
+          }
+        }
+
+        statusBar.style.display = 'none';
+        if (!gotResult && !streamError) {
+          resultEl.innerHTML = '<span style="color:#94a3b8">(stream ended without a result)</span>';
+        }
+        resetComplianceStreamUI();
       } catch (e) {
         statusBar.style.display = 'none';
+        resetComplianceStreamUI();
         resultEl.innerHTML = '<span style="color:#b91c1c">Error: ' + e.message.replace(/</g, '&lt;') + '</span>';
       }
       btn.disabled = false;

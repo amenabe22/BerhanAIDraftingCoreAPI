@@ -51,3 +51,4 @@ async def test_root_returns_json_when_file_missing(tmp_path, monkeypatch):
     body = r.json()
     assert "legal_search_stream" in body
     assert "legal_agent_stream" in body
+    assert "compliance_analyze_stream" in body

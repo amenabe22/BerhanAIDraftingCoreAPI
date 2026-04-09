@@ -1,8 +1,11 @@
 """Tests for compliance analysis: models, TipTap extraction, RRF, endpoint."""
 
+import contextlib
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from langchain_core.documents import Document
 
 from app.models.drafting.compliance import (
@@ -324,6 +327,66 @@ def test_compliance_analyze_endpoint_passes_check_level():
         assert r.status_code == 200
         call_kw = MockAgent.return_value.analyze_document.call_args[1]
         assert call_kw["check_level"] == "standard"
+
+
+def _parse_compliance_sse(text: str) -> list[dict]:
+    events = []
+    for line in text.splitlines():
+        if line.startswith("data: "):
+            with contextlib.suppress(json.JSONDecodeError):
+                events.append(json.loads(line[6:]))
+    return events
+
+
+@pytest.mark.asyncio
+async def test_compliance_analyze_stream_emits_progress_and_result():
+    """SSE stream includes progress events (percent) and a final result payload."""
+    from app.main import app
+
+    sample_blocks = [{"block_id": "b1", "text": "Sample.", "type": "paragraph", "doc_id": "doc-1"}]
+    mock_resp = ComplianceAnalysisResponse(
+        document_type="Contract",
+        overall_risk_level="LOW",
+        risk_score=10.0,
+        summary="OK",
+        clauses=[],
+        issues_by_block_id={},
+        recommendations=[],
+        critical_issues=[],
+        missing_clauses=[],
+        citations=[],
+    )
+
+    def fake_analyze(**kwargs):
+        cb = kwargs.get("progress_callback")
+        if cb:
+            cb({"phase": "prepare", "percent": 5, "message": "started"})
+        return mock_resp
+
+    with (
+        patch("app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id") as mock_get,
+        patch("app.api.v1.endpoints.drafting.compliance.ComplianceAnalysisAgent") as MockAgent,
+    ):
+        mock_get.return_value = sample_blocks
+        MockAgent.return_value.analyze_document.side_effect = fake_analyze
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            r = await client.post(
+                "/drafting/compliance/analyze-stream",
+                json={"doc_id": "doc-1", "language": "en"},
+            )
+
+    assert r.status_code == 200
+    assert "text/event-stream" in (r.headers.get("content-type") or "")
+    events = _parse_compliance_sse(r.text)
+    progress_events = [e for e in events if e.get("type") == "progress"]
+    assert len(progress_events) >= 1
+    assert progress_events[0]["percent"] == 5
+    assert progress_events[0]["phase"] == "prepare"
+    result_events = [e for e in events if e.get("type") == "result"]
+    assert len(result_events) == 1
+    assert result_events[0]["data"]["document_type"] == "Contract"
+    assert result_events[0]["data"]["risk_score"] == 10.0
 
 
 # ---------------------------------------------------------------------------

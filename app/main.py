@@ -82,6 +82,7 @@ async def root():
         "legal_agent_stream": "/legal-agent/stream",
         "doc_agent_stream": "/doc-agent/stream",
         "compliance_analyze": "/drafting/compliance/analyze",
+        "compliance_analyze_stream": "/drafting/compliance/analyze-stream",
     }
 
 

@@ -6,8 +6,9 @@ build_graph, get_graph.
 All external calls (LLM, Qdrant, Cohere) are mocked.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 # ---------------------------------------------------------------------------
@@ -72,49 +73,53 @@ def test_should_continue_returns_end_for_human_message():
 
 
 def _patch_llm_with_tools(response):
-    """Context manager: patch _llm_with_tools() so .invoke() returns *response*."""
+    """Context manager: patch _llm_with_tools() so .ainvoke() returns *response*."""
     mock_llm = MagicMock()
-    mock_llm.invoke.return_value = response
+    mock_llm.ainvoke = AsyncMock(return_value=response)
     return patch("app.graph._llm_with_tools", return_value=mock_llm)
 
 
-def test_agent_node_returns_messages_key():
+@pytest.mark.asyncio
+async def test_agent_node_returns_messages_key():
     from app.graph import _agent_node
 
     fake_response = AIMessage(content="Answer without tools.")
     with _patch_llm_with_tools(fake_response):
-        result = _agent_node(_state(SystemMessage(content="sys"), HumanMessage(content="hi")))
+        result = await _agent_node(_state(SystemMessage(content="sys"), HumanMessage(content="hi")))
     assert "messages" in result
     assert result["messages"] == [fake_response]
 
 
-def test_agent_node_uses_existing_system_message():
+@pytest.mark.asyncio
+async def test_agent_node_uses_existing_system_message():
     """_agent_node must not inject a second system message when one already exists."""
     from app.graph import _agent_node
 
     custom_sys = SystemMessage(content="Custom legal persona")
     fake_response = AIMessage(content="Advice here.")
     with _patch_llm_with_tools(fake_response) as mock_factory:
-        _agent_node(_state(custom_sys, HumanMessage(content="question")))
-        call_args = mock_factory.return_value.invoke.call_args[0][0]
-    # First message in the invoke call must be the custom system message
+        await _agent_node(_state(custom_sys, HumanMessage(content="question")))
+        call_args = mock_factory.return_value.ainvoke.call_args[0][0]
+    # First message in the ainvoke call must be the custom system message
     assert isinstance(call_args[0], SystemMessage)
     assert call_args[0].content == "Custom legal persona"
 
 
-def test_agent_node_injects_default_system_when_none_present():
+@pytest.mark.asyncio
+async def test_agent_node_injects_default_system_when_none_present():
     """When no system message exists in state, fall back to LEGAL_AGENT_SYSTEM."""
     from app.graph import LEGAL_AGENT_SYSTEM, _agent_node
 
     fake_response = AIMessage(content="Answer.")
     with _patch_llm_with_tools(fake_response) as mock_factory:
-        _agent_node(_state(HumanMessage(content="tell me about property law")))
-        call_args = mock_factory.return_value.invoke.call_args[0][0]
+        await _agent_node(_state(HumanMessage(content="tell me about property law")))
+        call_args = mock_factory.return_value.ainvoke.call_args[0][0]
     assert isinstance(call_args[0], SystemMessage)
     assert call_args[0].content == LEGAL_AGENT_SYSTEM
 
 
-def test_agent_node_logs_tool_calls_when_present(caplog):
+@pytest.mark.asyncio
+async def test_agent_node_logs_tool_calls_when_present(caplog):
     """_agent_node should log 'tool_calls' event when the LLM returns tool calls."""
     import logging
 
@@ -124,12 +129,13 @@ def test_agent_node_logs_tool_calls_when_present(caplog):
     tc_response.tool_calls = [{"name": "search_legal_knowledge", "args": {"query": "family law"}}]
     with _patch_llm_with_tools(tc_response):
         with caplog.at_level(logging.INFO, logger="graph"):
-            _agent_node(_state(HumanMessage(content="family law question")))
+            await _agent_node(_state(HumanMessage(content="family law question")))
     # The log output (JSON) should mention the event
     assert any("tool_calls" in r.message or "retrieve" in str(r.__dict__) for r in caplog.records)
 
 
-def test_agent_node_tool_call_args_as_json_string():
+@pytest.mark.asyncio
+async def test_agent_node_tool_call_args_as_json_string():
     """_tc_repr should safely parse JSON-string args."""
     import json as _json
 
@@ -140,17 +146,18 @@ def test_agent_node_tool_call_args_as_json_string():
     tc_response.tool_calls = [{"name": "search_legal_knowledge", "args": _json.dumps(args_dict)}]
     with _patch_llm_with_tools(tc_response):
         # Should not raise
-        _agent_node(_state(HumanMessage(content="inheritance question")))
+        await _agent_node(_state(HumanMessage(content="inheritance question")))
 
 
-def test_agent_node_tool_call_args_invalid_json_string():
+@pytest.mark.asyncio
+async def test_agent_node_tool_call_args_invalid_json_string():
     """_tc_repr must not crash on a non-JSON string in args."""
     from app.graph import _agent_node
 
     tc_response = MagicMock(spec=AIMessage)
     tc_response.tool_calls = [{"name": "search_legal_knowledge", "args": "not valid json {{"}]
     with _patch_llm_with_tools(tc_response):
-        _agent_node(_state(HumanMessage(content="question")))
+        await _agent_node(_state(HumanMessage(content="question")))
 
 
 # ---------------------------------------------------------------------------
