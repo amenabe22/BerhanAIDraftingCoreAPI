@@ -339,6 +339,7 @@ class ComplianceAnalysisAgent:
         document_type: str | None = None,
         check_level: str = "quick",
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        token_callback: Callable[[str], None] | None = None,
     ) -> ComplianceAnalysisResponse:
         """Run full pipeline and return ComplianceAnalysisResponse. If document_blocks (e.g. from Qdrant) is provided, use it for full_text and block context (block_id, type). check_level (quick/standard/deep) controls context and citation depth.
 
@@ -408,7 +409,7 @@ class ComplianceAnalysisAgent:
             model=model,
             temperature=getattr(settings, "COMPLIANCE_ANALYSIS_TEMPERATURE", 0.1),
             max_tokens=getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 16384),
-            streaming=False,
+            streaming=True,
         )
         prompt = _build_analysis_prompt(
             full_text,
@@ -427,8 +428,21 @@ class ComplianceAnalysisAgent:
             percent=42,
             message="Analyzing document against Ethiopian law (this step may take a while)",
         )
-        response = llm.invoke(prompt)
-        raw = response.content if hasattr(response, "content") else str(response)
+        raw_parts: list[str] = []
+        for chunk in llm.stream(prompt):
+            content = getattr(chunk, "content", "")
+            if not content:
+                continue
+            if isinstance(content, list):
+                text = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+            else:
+                text = str(content)
+            if not text:
+                continue
+            raw_parts.append(text)
+            if token_callback is not None:
+                token_callback(text)
+        raw = "".join(raw_parts).strip()
         try:
             data = _parse_analysis_response(raw)
         except json.JSONDecodeError as e:

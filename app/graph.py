@@ -3,12 +3,16 @@ from functools import lru_cache
 from typing import Annotated, Literal, TypedDict
 
 from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
     BaseMessage,
     SystemMessage,
+    message_chunk_to_message,
     trim_messages,
 )
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -115,7 +119,54 @@ def _trim(messages: list[BaseMessage], system: SystemMessage) -> list[BaseMessag
     return [system, *trimmed]
 
 
-async def _agent_node(state: dict) -> dict:
+def _chunk_to_text(content: object) -> str:
+    """Convert LangChain chunk content to plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
+
+
+def _stream_llm_response(llm_with_tools, messages_to_send: list[BaseMessage]) -> AIMessage:
+    """Stream token chunks while still returning one final AIMessage for graph state."""
+    writer = None
+    try:
+        writer = get_stream_writer()
+    except RuntimeError:
+        # Called outside a LangGraph runtime context (e.g. unit tests invoking
+        # the node directly). In that case, skip custom stream events.
+        writer = None
+    full_chunk: AIMessageChunk | None = None
+    saw_stream_chunk = False
+
+    for chunk in llm_with_tools.stream(messages_to_send):
+        if not isinstance(chunk, AIMessageChunk):
+            continue
+        saw_stream_chunk = True
+        full_chunk = chunk if full_chunk is None else full_chunk + chunk
+        text = _chunk_to_text(chunk.content)
+        if text and writer is not None:
+            writer({"type": "token", "content": text})
+
+    if not saw_stream_chunk:
+        return llm_with_tools.invoke(messages_to_send)
+
+    if full_chunk is None:
+        return llm_with_tools.invoke(messages_to_send)
+
+    return message_chunk_to_message(full_chunk)
+
+
+def _agent_node(state: dict) -> dict:
     messages = state["messages"]
     log.info(
         "agent step",
@@ -130,7 +181,7 @@ async def _agent_node(state: dict) -> dict:
         system = SystemMessage(content=LEGAL_AGENT_SYSTEM)
 
     messages_to_send = _trim(messages, system)
-    response = await _llm_with_tools().ainvoke(messages_to_send)
+    response = _stream_llm_response(_llm_with_tools(), messages_to_send)
 
     if getattr(response, "tool_calls", None):
 
@@ -203,7 +254,7 @@ def build_doc_graph(doc_id: str):
     doc_tool = get_doc_blocks_retriever_tool(doc_id)
     llm_with_doc_tools = _llm().bind_tools([_tool(), doc_tool])
 
-    async def _node(state: dict) -> dict:
+    def _node(state: dict) -> dict:
         messages = state["messages"]
         log.info(
             "doc agent step",
@@ -215,7 +266,7 @@ def build_doc_graph(doc_id: str):
             else SystemMessage(content=DOC_CONSULTANT_SYSTEM)
         )
         messages_to_send = _trim(messages, system)
-        response = await llm_with_doc_tools.ainvoke(messages_to_send)
+        response = _stream_llm_response(llm_with_doc_tools, messages_to_send)
 
         if getattr(response, "tool_calls", None):
 

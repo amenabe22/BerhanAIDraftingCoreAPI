@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from enum import Enum
@@ -5,7 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
 
 from app.api.v1.endpoints.drafting.compliance import router as compliance_router
@@ -192,23 +193,57 @@ async def _stream_endpoint(
         inputs = {"messages": initial_messages}
         tool_msg_buffers: dict[str, str] = {}
         status_sent = False
+        saw_custom_tokens = False
+        fallback_token_chunks: list[str] = []
+        loop = asyncio.get_running_loop()
+        stream_q: asyncio.Queue[tuple[str, object] | None] = asyncio.Queue()
+
+        def run_graph_stream() -> None:
+            try:
+                for item in graph.stream(
+                    inputs,
+                    stream_mode=["custom", "messages"],
+                    config=config,
+                ):
+                    asyncio.run_coroutine_threadsafe(stream_q.put(item), loop).result()
+            except Exception as exc:
+                asyncio.run_coroutine_threadsafe(
+                    stream_q.put(("error", str(exc))),
+                    loop,
+                ).result()
+            finally:
+                asyncio.run_coroutine_threadsafe(stream_q.put(None), loop).result()
+
+        stream_task = asyncio.create_task(asyncio.to_thread(run_graph_stream))
 
         try:
-            async for chunk, meta in graph.astream(
-                inputs,
-                stream_mode="messages",
-                config=config,
-            ):
+            while True:
+                item = await stream_q.get()
+                if item is None:
+                    break
+
+                mode, payload = item
+                if mode == "custom":
+                    if isinstance(payload, dict) and payload.get("type") == "token":
+                        content = payload.get("content", "")
+                        if content:
+                            saw_custom_tokens = True
+                            yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                    continue
+
+                if mode == "error":
+                    yield f"data: {json.dumps({'type': 'error', 'message': str(payload)})}\n\n"
+                    return
+
+                if mode != "messages":
+                    continue
+
+                chunk, meta = payload
                 node = meta.get("langgraph_node", "") if isinstance(meta, dict) else ""
                 content = getattr(chunk, "content", None)
 
                 # Detect the moment the agent decides to call a tool and notify the client
-                if (
-                    not status_sent
-                    and isinstance(chunk, AIMessage)
-                    and getattr(chunk, "tool_calls", None)
-                    and node == "agent"
-                ):
+                if not status_sent and getattr(chunk, "tool_calls", None) and node == "agent":
                     status_sent = True
                     yield f"data: {json.dumps({'type': 'status', 'message': status_message})}\n\n"
 
@@ -216,7 +251,10 @@ async def _stream_endpoint(
                     tid = getattr(chunk, "tool_call_id", None) or chunk.id or ""
                     tool_msg_buffers[tid] = tool_msg_buffers.get(tid, "") + (content or "")
                 elif content and node == "agent" and not isinstance(chunk, ToolMessage):
-                    yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                    # Buffer message-mode content and only emit it if custom token
+                    # events never arrive. On Python 3.10 sync graph.stream()
+                    # yields both messages and custom events for the same chunk.
+                    fallback_token_chunks.append(content)
 
         except Exception as exc:
             log.error(
@@ -225,10 +263,15 @@ async def _stream_endpoint(
             )
             yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
             return
+        finally:
+            await stream_task
 
         collected: list[ToolMessage] = [
             ToolMessage(content=text, tool_call_id=tid) for tid, text in tool_msg_buffers.items()
         ]
+        if not saw_custom_tokens:
+            for content in fallback_token_chunks:
+                yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
         citations = _parse_citations(collected)
         if citations:
             yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"

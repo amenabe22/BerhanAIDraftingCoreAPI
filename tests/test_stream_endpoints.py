@@ -20,6 +20,7 @@ from tests.conftest import (
     CITATION_BLOCK,
     _make_ai_token_chunk,
     _make_ai_tool_call_chunk,
+    _make_custom_token_event,
     _make_tool_message_chunk,
     make_mock_graph,
 )
@@ -114,6 +115,33 @@ async def test_token_events_present(endpoint):
     assert len(token_events) == 2
     assert token_events[0]["content"] == "Hello "
     assert token_events[1]["content"] == "world."
+
+
+# ---------------------------------------------------------------------------
+# 3b. Custom token events are streamed incrementally without duplicate fallback
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ENDPOINTS)
+async def test_custom_token_events_prevent_duplicate_message_fallback(endpoint):
+    chunks = [
+        _make_custom_token_event("To "),
+        _make_custom_token_event("form "),
+        _make_custom_token_event("a contract"),
+        # Final aggregated message event often arrives in messages mode; should be ignored
+        # for token SSE once custom streaming has already emitted chunks.
+        ("messages", _make_ai_token_chunk("To form a contract")),
+    ]
+    graph = make_mock_graph(chunks)
+    with patch("app.main.get_graph", return_value=graph):
+        from app.main import app
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            r = await client.post(endpoint, json={"message": "hello"})
+
+    token_events = [e for e in parse_sse(r.text) if e["type"] == "token"]
+    assert [e["content"] for e in token_events] == ["To ", "form ", "a contract"]
 
 
 # ---------------------------------------------------------------------------
@@ -286,14 +314,13 @@ async def test_followup_turn_injects_only_human_message(endpoint):
     graph = make_mock_graph([_make_ai_token_chunk("Follow-up answer.")], has_state=True)
     captured = {}
 
-    original_astream = graph.astream
+    original_stream = graph.stream
 
-    async def capturing_astream(inputs, **kwargs):
+    def capturing_stream(inputs, **kwargs):
         captured["messages"] = inputs["messages"]
-        async for chunk in original_astream(inputs, **kwargs):
-            yield chunk
+        yield from original_stream(inputs, **kwargs)
 
-    graph.astream = capturing_astream
+    graph.stream = capturing_stream
 
     with patch("app.main.get_graph", return_value=graph):
         from app.main import app
@@ -318,14 +345,13 @@ async def test_first_turn_injects_system_and_human_message(endpoint):
     graph = make_mock_graph([_make_ai_token_chunk("First answer.")], has_state=False)
     captured = {}
 
-    original_astream = graph.astream
+    original_stream = graph.stream
 
-    async def capturing_astream(inputs, **kwargs):
+    def capturing_stream(inputs, **kwargs):
         captured["messages"] = inputs["messages"]
-        async for chunk in original_astream(inputs, **kwargs):
-            yield chunk
+        yield from original_stream(inputs, **kwargs)
 
-    graph.astream = capturing_astream
+    graph.stream = capturing_stream
 
     with patch("app.main.get_graph", return_value=graph):
         from app.main import app
@@ -350,12 +376,11 @@ async def test_legal_search_injects_legal_agent_system():
     graph = make_mock_graph([_make_ai_token_chunk("ok")], has_state=False)
     captured = {}
 
-    async def capturing_astream(inputs, **kwargs):
+    def capturing_stream(inputs, **kwargs):
         captured["messages"] = inputs["messages"]
-        for c in []:
-            yield c
+        yield from []
 
-    graph.astream = capturing_astream
+    graph.stream = capturing_stream
 
     with patch("app.main.get_graph", return_value=graph):
         from app.main import app
@@ -373,12 +398,11 @@ async def test_legal_agent_injects_legal_advisor_system():
     graph = make_mock_graph([_make_ai_token_chunk("ok")], has_state=False)
     captured = {}
 
-    async def capturing_astream(inputs, **kwargs):
+    def capturing_stream(inputs, **kwargs):
         captured["messages"] = inputs["messages"]
-        for c in []:
-            yield c
+        yield from []
 
-    graph.astream = capturing_astream
+    graph.stream = capturing_stream
 
     with patch("app.main.get_graph", return_value=graph):
         from app.main import app

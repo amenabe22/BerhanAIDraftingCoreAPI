@@ -52,6 +52,7 @@ async def analyze_compliance_stream(request: ComplianceAnalysisRequest) -> Strea
     Each line is ``data: <json>``. Events:
 
     - ``{"type":"progress","phase":str,"percent":int,"message":str}`` — pipeline milestones.
+    - ``{"type":"token","content":str}`` — LLM output chunks while analysis is running.
     - ``{"type":"result","data":{...}}`` — full analysis (same shape as POST /analyze JSON body).
     - ``{"type":"error","message":str}`` — client or server error (stream then ends).
 
@@ -61,7 +62,12 @@ async def analyze_compliance_stream(request: ComplianceAnalysisRequest) -> Strea
     progress_q: asyncio.Queue[dict[str, str | int] | None] = asyncio.Queue()
 
     def progress_callback(event: dict[str, str | int]) -> None:
-        asyncio.run_coroutine_threadsafe(progress_q.put(event), loop)
+        asyncio.run_coroutine_threadsafe(progress_q.put({"type": "progress", **event}), loop)
+
+    def token_callback(content: str) -> None:
+        asyncio.run_coroutine_threadsafe(
+            progress_q.put({"type": "token", "content": content}), loop
+        )
 
     def run() -> ComplianceAnalysisResponse | None:
         try:
@@ -75,6 +81,7 @@ async def analyze_compliance_stream(request: ComplianceAnalysisRequest) -> Strea
                 document_type=None,
                 check_level=request.check_level,
                 progress_callback=progress_callback,
+                token_callback=token_callback,
             )
         finally:
             asyncio.run_coroutine_threadsafe(progress_q.put(None), loop)
@@ -85,7 +92,7 @@ async def analyze_compliance_stream(request: ComplianceAnalysisRequest) -> Strea
             ev = await progress_q.get()
             if ev is None:
                 break
-            yield f"data: {json.dumps({'type': 'progress', **ev})}\n\n"
+            yield f"data: {json.dumps(ev)}\n\n"
         try:
             result = await task
         except ValueError as e:

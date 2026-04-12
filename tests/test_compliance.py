@@ -389,6 +389,51 @@ async def test_compliance_analyze_stream_emits_progress_and_result():
     assert result_events[0]["data"]["risk_score"] == 10.0
 
 
+@pytest.mark.asyncio
+async def test_compliance_analyze_stream_emits_token_chunks():
+    """SSE stream forwards LLM chunk events from token_callback during analysis."""
+    from app.main import app
+
+    sample_blocks = [{"block_id": "b1", "text": "Sample.", "type": "paragraph", "doc_id": "doc-1"}]
+    mock_resp = ComplianceAnalysisResponse(
+        document_type="Contract",
+        overall_risk_level="LOW",
+        risk_score=10.0,
+        summary="OK",
+        clauses=[],
+        issues_by_block_id={},
+        recommendations=[],
+        critical_issues=[],
+        missing_clauses=[],
+        citations=[],
+    )
+
+    def fake_analyze(**kwargs):
+        token_cb = kwargs.get("token_callback")
+        if token_cb:
+            token_cb("Part 1 ")
+            token_cb("Part 2")
+        return mock_resp
+
+    with (
+        patch("app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id") as mock_get,
+        patch("app.api.v1.endpoints.drafting.compliance.ComplianceAnalysisAgent") as MockAgent,
+    ):
+        mock_get.return_value = sample_blocks
+        MockAgent.return_value.analyze_document.side_effect = fake_analyze
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            r = await client.post(
+                "/drafting/compliance/analyze-stream",
+                json={"doc_id": "doc-1", "language": "en"},
+            )
+
+    assert r.status_code == 200
+    events = _parse_compliance_sse(r.text)
+    token_events = [e for e in events if e.get("type") == "token"]
+    assert [e["content"] for e in token_events] == ["Part 1 ", "Part 2"]
+
+
 # ---------------------------------------------------------------------------
 # analysis_agent helpers (coverage)
 # ---------------------------------------------------------------------------
@@ -646,7 +691,7 @@ def test_to_clause_reads_new_fields_from_llm_dict():
         ),
         patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
     ):
-        mock_llm_cls.return_value.invoke.return_value = MagicMock(content=llm_json)
+        mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
         agent = ComplianceAnalysisAgent()
         resp = agent.analyze_document(document_text="No compete sample.", language="en")
 
@@ -703,7 +748,7 @@ def test_to_clause_missing_new_fields_defaults_to_empty():
         ),
         patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
     ):
-        mock_llm_cls.return_value.invoke.return_value = MagicMock(content=llm_json)
+        mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
         agent = ComplianceAnalysisAgent()
         resp = agent.analyze_document(document_text="Some contract.", language="en")
 
@@ -937,7 +982,7 @@ def test_analyze_document_full_pipeline_mocked():
             ),
         ]
         mock_rerank.return_value = mock_search.return_value
-        mock_llm_cls.return_value.invoke.return_value = MagicMock(content=llm_json)
+        mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
 
         agent = ComplianceAnalysisAgent()
         resp = agent.analyze_document(document_text="Sample contract.", language="en")

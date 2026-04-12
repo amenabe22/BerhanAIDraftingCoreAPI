@@ -52,6 +52,11 @@ def _make_tool_message_chunk(content: str, tool_call_id: str = "tc1", node: str 
     return (msg, meta)
 
 
+def _make_custom_token_event(content: str) -> tuple[str, dict]:
+    """Build a custom stream-mode token event from graph nodes."""
+    return ("custom", {"type": "token", "content": content})
+
+
 CITATION_BLOCK = (
     "[Source: english-civil-code-1960 | Article 1675 | Art. 1675. Contract defined.]\n"
     "A contract is an agreement whereby two or more persons create, vary or extinguish obligations."
@@ -77,11 +82,38 @@ def make_mock_graph(chunks: list, has_state: bool = False):
     """
     graph = MagicMock()
 
-    async def _astream(*args, **kwargs):
+    def _stream_impl(*args, **kwargs):
+        stream_mode = kwargs.get("stream_mode")
+        multi_mode = isinstance(stream_mode, list | tuple)
         for c in chunks:
-            yield c
+            # Explicit mode payload supplied by test case.
+            if (
+                isinstance(c, tuple)
+                and len(c) == 2
+                and isinstance(c[0], str)
+                and c[0] in {"custom", "messages"}
+            ):
+                if multi_mode:
+                    yield c
+                elif c[0] == "messages":
+                    yield c[1]
+                continue
+
+            # Backward-compatible shorthand: raw (chunk, meta) pairs.
+            if multi_mode:
+                yield ("messages", c)
+            else:
+                yield c
+
+    async def _astream(*args, **kwargs):
+        for item in _stream_impl(*args, **kwargs):
+            yield item
+
+    def _stream(*args, **kwargs):
+        yield from _stream_impl(*args, **kwargs)
 
     graph.astream = _astream
+    graph.stream = _stream
 
     state_mock = MagicMock()
     if has_state:
@@ -127,11 +159,24 @@ def error_chunks():
     """A stream that raises mid-way."""
 
     async def _bad_stream(*args, **kwargs):
-        yield _make_ai_token_chunk("Starting...")
+        stream_mode = kwargs.get("stream_mode")
+        if isinstance(stream_mode, list | tuple):
+            yield ("messages", _make_ai_token_chunk("Starting..."))
+        else:
+            yield _make_ai_token_chunk("Starting...")
+        raise RuntimeError("upstream LLM failure")
+
+    def _bad_sync_stream(*args, **kwargs):
+        stream_mode = kwargs.get("stream_mode")
+        if isinstance(stream_mode, list | tuple):
+            yield ("messages", _make_ai_token_chunk("Starting..."))
+        else:
+            yield _make_ai_token_chunk("Starting...")
         raise RuntimeError("upstream LLM failure")
 
     graph = MagicMock()
     graph.astream = _bad_stream
+    graph.stream = _bad_sync_stream
     state_mock = MagicMock()
     state_mock.values = {"messages": []}
     graph.get_state = MagicMock(return_value=state_mock)
