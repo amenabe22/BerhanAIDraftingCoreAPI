@@ -169,6 +169,7 @@ def test_doc_consultant_system_mentions_both_tools():
 
     assert "search_user_documents" in DOC_CONSULTANT_SYSTEM
     assert "search_legal_knowledge" in DOC_CONSULTANT_SYSTEM
+    assert "Legal AI Model built by BerhanAI" in DOC_CONSULTANT_SYSTEM
 
 
 def test_doc_consultant_system_is_non_empty():

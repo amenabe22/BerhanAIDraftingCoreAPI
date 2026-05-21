@@ -55,6 +55,9 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
     language: Language | None = None
+    # Optional URL of any file/image supported by Gemini multimodal (JPEG, PNG,
+    # GIF, WEBP, PDF, MP4, MP3, WAV, …). Null / omitted → text-only message.
+    file_url: str | None = None
 
 
 class DocChatRequest(BaseModel):
@@ -162,6 +165,17 @@ def _is_new_thread(graph, thread_id: str) -> bool:
         return True
 
 
+def _human_message_content(message: str, file_url: str | None) -> str | list:
+    """Build HumanMessage content: plain text, or text + image for Gemini multimodal."""
+    url = (file_url or "").strip() or None
+    if not url:
+        return message
+    return [
+        {"type": "text", "text": message},
+        {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
+    ]
+
+
 async def _stream_endpoint(
     request: ChatRequest,
     event_type: str,
@@ -170,10 +184,18 @@ async def _stream_endpoint(
     status_message: str = "Searching legal knowledge base…",
 ) -> StreamingResponse:
     thread_id = request.thread_id or str(uuid.uuid4())
+    file_url = (request.file_url or "").strip() or None
     log.info(
         event_type,
-        extra={"event": event_type, "user_message": request.message, "thread_id": thread_id},
+        extra={
+            "event": event_type,
+            "user_message": request.message,
+            "thread_id": thread_id,
+            "has_file_url": bool(file_url),
+        },
     )
+
+    human_content = _human_message_content(request.message, request.file_url)
 
     # Only inject the SystemMessage on the very first turn of a thread.
     # On follow-up turns the checkpointer already has the system message stored.
@@ -181,10 +203,10 @@ async def _stream_endpoint(
     if first_turn:
         initial_messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=request.message),
+            HumanMessage(content=human_content),
         ]
     else:
-        initial_messages = [HumanMessage(content=request.message)]
+        initial_messages = [HumanMessage(content=human_content)]
 
     async def event_stream():
         yield f"data: {json.dumps({'type': 'thread_id', 'thread_id': thread_id})}\n\n"

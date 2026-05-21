@@ -411,3 +411,149 @@ async def test_legal_agent_injects_legal_advisor_system():
             await client.post("/legal-agent/stream", json={"message": "q"})
 
     assert LEGAL_ADVISOR_SYSTEM in captured["messages"][0].content
+
+
+# ---------------------------------------------------------------------------
+# 15. Identity guardrail in system prompts
+# ---------------------------------------------------------------------------
+
+_IDENTITY_PHRASE = "Legal AI Model built by BerhanAI"
+
+
+def test_all_system_prompts_include_identity_guardrail():
+    from app.graph import (
+        DOC_CONSULTANT_SYSTEM,
+        LEGAL_ADVISOR_SYSTEM,
+        LEGAL_AGENT_SYSTEM,
+        _IDENTITY_GUARDRAIL,
+    )
+
+    for prompt in (LEGAL_AGENT_SYSTEM, LEGAL_ADVISOR_SYSTEM, DOC_CONSULTANT_SYSTEM):
+        assert _IDENTITY_GUARDRAIL in prompt
+        assert _IDENTITY_PHRASE in prompt
+        assert "Never mention Google, Gemini" in prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ENDPOINTS)
+async def test_stream_endpoints_inject_identity_guardrail(endpoint):
+    from app.graph import _IDENTITY_GUARDRAIL
+
+    graph = make_mock_graph([_make_ai_token_chunk("ok")], has_state=False)
+    captured = {}
+
+    def capturing_stream(inputs, **kwargs):
+        captured["messages"] = inputs["messages"]
+        yield from []
+
+    graph.stream = capturing_stream
+
+    with patch("app.main.get_graph", return_value=graph):
+        from app.main import app
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post(endpoint, json={"message": "Who are you?"})
+
+    system_content = captured["messages"][0].content
+    assert _IDENTITY_GUARDRAIL in system_content
+    assert _IDENTITY_PHRASE in system_content
+    assert "I'm a Legal AI Model built by BerhanAI" in system_content
+    assert "trained by Google" not in system_content
+
+
+# ---------------------------------------------------------------------------
+# 16. file_url / multimodal HumanMessage content
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "file_url",
+    [None, "", "   "],
+)
+def test_human_message_content_without_file_url(file_url):
+    from app.main import _human_message_content
+
+    assert _human_message_content("What is this?", file_url) == "What is this?"
+
+
+def test_human_message_content_strips_file_url_whitespace():
+    from app.main import _human_message_content
+
+    content = _human_message_content(
+        "Describe this product",
+        "  https://example.com/photo.jpg  ",
+    )
+    assert content == [
+        {"type": "text", "text": "Describe this product"},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/photo.jpg", "detail": "high"},
+        },
+    ]
+
+
+def test_human_message_content_with_file_url():
+    from app.main import _human_message_content
+
+    url = "https://example.com/doc.pdf"
+    content = _human_message_content("Legal question", url)
+    assert content[0] == {"type": "text", "text": "Legal question"}
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"] == url
+    assert content[1]["image_url"]["detail"] == "high"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ENDPOINTS)
+async def test_stream_with_file_url_builds_multimodal_human_message(endpoint):
+    graph = make_mock_graph([_make_ai_token_chunk("ok")], has_state=False)
+    captured = {}
+
+    def capturing_stream(inputs, **kwargs):
+        captured["messages"] = inputs["messages"]
+        yield from []
+
+    graph.stream = capturing_stream
+
+    with patch("app.main.get_graph", return_value=graph):
+        from app.main import app
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post(
+                endpoint,
+                json={
+                    "message": "What are the import rules for this?",
+                    "file_url": "https://example.com/product.jpeg",
+                },
+            )
+
+    human = captured["messages"][-1]
+    assert isinstance(human, HumanMessage)
+    assert human.content[0] == {
+        "type": "text",
+        "text": "What are the import rules for this?",
+    }
+    assert human.content[1]["image_url"]["url"] == "https://example.com/product.jpeg"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ENDPOINTS)
+async def test_stream_without_file_url_uses_plain_text_human_message(endpoint):
+    graph = make_mock_graph([_make_ai_token_chunk("ok")], has_state=False)
+    captured = {}
+
+    def capturing_stream(inputs, **kwargs):
+        captured["messages"] = inputs["messages"]
+        yield from []
+
+    graph.stream = capturing_stream
+
+    with patch("app.main.get_graph", return_value=graph):
+        from app.main import app
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post(endpoint, json={"message": "plain text only", "file_url": None})
+
+    human = captured["messages"][-1]
+    assert isinstance(human, HumanMessage)
+    assert human.content == "plain text only"

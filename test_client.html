@@ -79,6 +79,12 @@
     <p class="desc">Retrieval-grounded search: synthesized answer with citations. Messages in the same conversation are remembered.</p>
     <label>Message</label>
     <textarea id="searchMessage">What are the steps to form a legal contract?</textarea>
+    <label>File / Image URL <span style="color:#94a3b8;font-weight:400;font-size:0.75rem">optional — any Gemini-supported URL: image (JPEG, PNG, GIF, WEBP), PDF, video, audio, etc.</span></label>
+    <input type="url" id="searchFileUrl" placeholder="https://example.com/document.pdf or https://example.com/photo.jpg" />
+    <div id="searchFilePreview" style="display:none; margin-top:0.35rem; padding:0.35rem 0.6rem; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; font-size:0.78rem; color:#166534; align-items:center; gap:0.4rem;">
+      <span>📎</span><span id="searchFilePreviewText" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
+      <button type="button" class="secondary" style="padding:0.1rem 0.45rem;font-size:0.72rem;flex-shrink:0;" onclick="clearSearchFileUrl()">✕</button>
+    </div>
     <div class="lang-row">
       <label for="searchLang">Response language</label>
       <select id="searchLang" class="lang-select">
@@ -108,6 +114,12 @@
     <p class="desc">Legal consultant agent: advisory answers over any legal matter. Messages in the same conversation are remembered.</p>
     <label>Message</label>
     <textarea id="agentMessage">I need advice on my contract obligations.</textarea>
+    <label>File / Image URL <span style="color:#94a3b8;font-weight:400;font-size:0.75rem">optional — any Gemini-supported URL: image (JPEG, PNG, GIF, WEBP), PDF, video, audio, etc.</span></label>
+    <input type="url" id="agentFileUrl" placeholder="https://example.com/document.pdf or https://example.com/photo.jpg" />
+    <div id="agentFilePreview" style="display:none; margin-top:0.35rem; padding:0.35rem 0.6rem; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; font-size:0.78rem; color:#166534; align-items:center; gap:0.4rem;">
+      <span>📎</span><span id="agentFilePreviewText" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
+      <button type="button" class="secondary" style="padding:0.1rem 0.45rem;font-size:0.72rem;flex-shrink:0;" onclick="clearAgentFileUrl()">✕</button>
+    </div>
     <div class="lang-row">
       <label for="agentLang">Response language</label>
       <select id="agentLang" class="lang-select">
@@ -248,14 +260,51 @@
       } catch (e) { show(el, 'Error: ' + e.message, true); }
     });
 
+    // File URL preview handling
+    function updateSearchFilePreview() {
+      const url = document.getElementById('searchFileUrl').value.trim();
+      const preview = document.getElementById('searchFilePreview');
+      const previewText = document.getElementById('searchFilePreviewText');
+      if (url) {
+        previewText.textContent = url;
+        preview.style.display = 'flex';
+      } else {
+        preview.style.display = 'none';
+      }
+    }
+    function clearSearchFileUrl() {
+      document.getElementById('searchFileUrl').value = '';
+      document.getElementById('searchFilePreview').style.display = 'none';
+    }
+    document.getElementById('searchFileUrl').addEventListener('input', updateSearchFilePreview);
+
+    function updateAgentFilePreview() {
+      const url = document.getElementById('agentFileUrl').value.trim();
+      const preview = document.getElementById('agentFilePreview');
+      const previewText = document.getElementById('agentFilePreviewText');
+      if (url) {
+        previewText.textContent = url;
+        preview.style.display = 'flex';
+      } else {
+        preview.style.display = 'none';
+      }
+    }
+    function clearAgentFileUrl() {
+      document.getElementById('agentFileUrl').value = '';
+      document.getElementById('agentFilePreview').style.display = 'none';
+    }
+    document.getElementById('agentFileUrl').addEventListener('input', updateAgentFilePreview);
+
     document.getElementById('searchNewBtn').addEventListener('click', () => {
       state.search = null;
+      clearSearchFileUrl();
       setThreadBar('searchThreadBar', 'searchThreadId', null);
       document.getElementById('searchAnswer').style.display = 'none';
       document.getElementById('searchCitations').style.display = 'none';
     });
     document.getElementById('agentNewBtn').addEventListener('click', () => {
       state.agent = null;
+      clearAgentFileUrl();
       setThreadBar('agentThreadBar', 'agentThreadId', null);
       document.getElementById('agentAnswer').style.display = 'none';
       document.getElementById('agentCitations').style.display = 'none';
@@ -342,25 +391,27 @@
     document.getElementById('searchBtn').addEventListener('click', () => {
       const message = document.getElementById('searchMessage').value.trim();
       if (!message) return;
+      const fileUrl = document.getElementById('searchFileUrl').value.trim();
       streamEndpoint('/legal-search/stream', message, 'search',
         'searchThreadBar', 'searchThreadId',
         document.getElementById('searchAnswer'),
         document.getElementById('searchCitations'),
         document.getElementById('searchBtn'),
         'searchStatusBar', 'searchStatusMsg',
-        langExtra('searchLang'));
+        { ...langExtra('searchLang'), ...(fileUrl ? { file_url: fileUrl } : {}) });
     });
 
     document.getElementById('agentBtn').addEventListener('click', () => {
       const message = document.getElementById('agentMessage').value.trim();
       if (!message) return;
+      const fileUrl = document.getElementById('agentFileUrl').value.trim();
       streamEndpoint('/legal-agent/stream', message, 'agent',
         'agentThreadBar', 'agentThreadId',
         document.getElementById('agentAnswer'),
         document.getElementById('agentCitations'),
         document.getElementById('agentBtn'),
         'agentStatusBar', 'agentStatusMsg',
-        langExtra('agentLang'));
+        { ...langExtra('agentLang'), ...(fileUrl ? { file_url: fileUrl } : {}) });
     });
 
     document.getElementById('docBtn').addEventListener('click', () => {
