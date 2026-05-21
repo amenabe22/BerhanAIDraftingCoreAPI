@@ -431,7 +431,25 @@ def test_all_system_prompts_include_identity_guardrail():
     for prompt in (LEGAL_AGENT_SYSTEM, LEGAL_ADVISOR_SYSTEM, DOC_CONSULTANT_SYSTEM):
         assert _IDENTITY_GUARDRAIL in prompt
         assert _IDENTITY_PHRASE in prompt
+        assert "Only if the user explicitly asks" in prompt
+        assert "Do not state your identity" in prompt
         assert "Never mention Google, Gemini" in prompt
+
+
+def test_legal_prompts_include_balanced_tone_and_attachment_guidance():
+    from app.graph import (
+        LEGAL_ADVISOR_SYSTEM,
+        LEGAL_AGENT_SYSTEM,
+        _ATTACHMENT_GUIDANCE,
+        _RETRIEVAL_GUIDANCE,
+        _TONE_GUIDANCE,
+    )
+
+    for prompt in (LEGAL_AGENT_SYSTEM, LEGAL_ADVISOR_SYSTEM):
+        assert _TONE_GUIDANCE in prompt
+        assert _ATTACHMENT_GUIDANCE in prompt
+        assert _RETRIEVAL_GUIDANCE in prompt
+        assert "MANDATORY: For EVERY user question" not in prompt
 
 
 @pytest.mark.asyncio
@@ -457,7 +475,8 @@ async def test_stream_endpoints_inject_identity_guardrail(endpoint):
     system_content = captured["messages"][0].content
     assert _IDENTITY_GUARDRAIL in system_content
     assert _IDENTITY_PHRASE in system_content
-    assert "I'm a Legal AI Model built by BerhanAI" in system_content
+    assert "Only if the user explicitly asks" in system_content
+    assert "Do not state your identity" in system_content
     assert "trained by Google" not in system_content
 
 
