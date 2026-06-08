@@ -586,6 +586,54 @@ def test_map_clauses_to_blocks():
     assert clauses[0]["block_id"] == "b0"
 
 
+def test_map_clauses_to_blocks_clears_invalid_block_id():
+    from app.services.drafting.compliance.analysis_agent import _map_clauses_to_blocks
+
+    clauses = [{"clause_id": "1", "text": "First clause here.", "block_id": "b99"}]
+    blocks = [{"block_id": "b0", "text": "First clause here."}]
+    _map_clauses_to_blocks(clauses, blocks)
+    assert clauses[0]["block_id"] == "b0"
+
+
+def test_map_issues_to_blocks_clears_invalid_block_id():
+    from app.services.drafting.compliance.analysis_agent import _map_issues_to_blocks
+
+    issues = [
+        {
+            "issue_id": "i1",
+            "description": "Problem in the liability section.",
+            "block_id": "b31",
+        }
+    ]
+    blocks = [
+        {
+            "block_id": "real-block-1",
+            "text": "Problem in the liability section of this agreement.",
+        }
+    ]
+    _map_issues_to_blocks(issues, blocks)
+    assert issues[0]["block_id"] == "real-block-1"
+
+
+def test_build_analysis_prompt_includes_block_ids():
+    from app.services.drafting.compliance.analysis_agent import _build_analysis_prompt
+
+    blocks = [
+        {"block_id": "abc-123", "type": "paragraph", "text": "Parties agree to the terms."},
+        {"block_id": "def-456", "type": "heading", "text": "Liability"},
+    ]
+    prompt = _build_analysis_prompt(
+        full_text="Parties agree to the terms.\n\nLiability",
+        blocks=blocks,
+        legal_context="",
+        document_type="Contract",
+        language="en",
+    )
+    assert "[block_id: abc-123 | type: paragraph]" in prompt
+    assert "[block_id: def-456 | type: heading]" in prompt
+    assert "do not invent block_ids" in prompt
+
+
 def test_clauses_fallback_from_blocks():
     from app.services.drafting.compliance.analysis_agent import _clauses_fallback_from_blocks
 

@@ -153,6 +153,95 @@ def _format_legal_context(docs: list[Document]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _format_blocks_for_prompt(
+    blocks: list[dict],
+    *,
+    blocks_limit: int = 50,
+    block_char_limit: int = 200,
+) -> str:
+    """Format document blocks with block_id for the analysis prompt."""
+    if not blocks:
+        return "(no structured blocks available)"
+    lines: list[str] = []
+    for b in blocks[:blocks_limit]:
+        block_id = b.get("block_id")
+        if not block_id:
+            continue
+        block_type = b.get("type") or "paragraph"
+        text = (b.get("text") or "").strip()
+        if not text:
+            continue
+        excerpt = text[:block_char_limit]
+        if len(text) > block_char_limit:
+            excerpt += "…"
+        lines.append(f"[block_id: {block_id} | type: {block_type}] {excerpt}")
+    return "\n".join(lines) if lines else "(no structured blocks available)"
+
+
+def _valid_block_ids(blocks: list[dict]) -> set[str]:
+    return {str(b["block_id"]) for b in blocks if b.get("block_id")}
+
+
+def _normalize_match_text(text: str) -> str:
+    """Lowercase and collapse whitespace for fuzzy block text matching."""
+    return re.sub(r"\s+", " ", (text or "").lower().strip())
+
+
+def _match_block_by_text(text: str, blocks: list[dict]) -> str | None:
+    """Return block_id whose text best matches the given excerpt."""
+    excerpt = _normalize_match_text(text[:300])
+    if len(excerpt) < 8:
+        return None
+    excerpt_core = excerpt.rstrip(".,;:!?")
+    for b in blocks:
+        block_text = _normalize_match_text(b.get("text") or "")
+        if not block_text:
+            continue
+        block_core = block_text.rstrip(".,;:!?")
+        if (
+            block_text in excerpt
+            or excerpt in block_text
+            or (excerpt_core and excerpt_core in block_text)
+            or (block_core and block_core in excerpt)
+        ):
+            bid = b.get("block_id")
+            if bid:
+                return str(bid)
+    return None
+
+
+def _map_clauses_to_blocks(clauses: list[dict], blocks: list[dict]) -> None:
+    """Assign block_id to clauses by matching text/order where possible."""
+    if not blocks:
+        return
+    valid_ids = _valid_block_ids(blocks)
+    for c in clauses:
+        bid = c.get("block_id")
+        if bid and str(bid) not in valid_ids:
+            c["block_id"] = None
+        if c.get("block_id"):
+            continue
+        matched = _match_block_by_text(c.get("text") or "", blocks)
+        if matched:
+            c["block_id"] = matched
+
+
+def _map_issues_to_blocks(issues: list[dict], blocks: list[dict]) -> None:
+    """Assign block_id to issues by matching description text to blocks."""
+    if not blocks:
+        return
+    valid_ids = _valid_block_ids(blocks)
+    for issue in issues:
+        bid = issue.get("block_id")
+        if bid and str(bid) not in valid_ids:
+            issue["block_id"] = None
+        if issue.get("block_id"):
+            continue
+        matched = _match_block_by_text(issue.get("description") or "", blocks)
+        if matched:
+            issue["block_id"] = matched
+
+
 def _build_analysis_prompt(
     full_text: str,
     blocks: list[dict],
@@ -166,12 +255,22 @@ def _build_analysis_prompt(
     legal_context_limit: int = 15_000,
 ) -> str:
     """Build the main analysis prompt with checklist and output schema."""
+    blocks_context = _format_blocks_for_prompt(
+        blocks,
+        blocks_limit=blocks_limit,
+        block_char_limit=block_char_limit,
+    )
     return f"""Analyze the following document for compliance with Ethiopian law. Output valid JSON only.
 
 Document type: {document_type}
 Language for response: {language}
 
 Checklist of areas to consider: {COMPLIANCE_CHECKLIST}
+
+Document blocks (use ONLY these block_id values when tying clauses or issues to the document; do not invent block_ids):
+---
+{blocks_context}
+---
 
 Document text (excerpt):
 ---
@@ -183,9 +282,9 @@ Relevant Ethiopian law (use for citations):
 {legal_context[:legal_context_limit]}
 ---
 
-If blocks were provided, reference block_id when tying issues to specific clauses.
+When tying clauses or issues to the document, set block_id to one of the block_id values listed in Document blocks above. If no block matches, use null — never guess or invent a block_id.
 
-IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id if you can match to a block above, and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
+IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
 Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
 {{
@@ -306,25 +405,6 @@ def _clauses_fallback_from_blocks(blocks: list[dict]) -> list[dict]:
             }
         )
     return out
-
-
-def _map_clauses_to_blocks(clauses: list[dict], blocks: list[dict]) -> None:
-    """Assign block_id to clauses by matching text/order where possible."""
-    if not blocks:
-        return
-    for c in clauses:
-        if c.get("block_id"):
-            continue
-        text = (c.get("text") or "")[:300]
-        for b in blocks:
-            if (
-                b.get("text")
-                and text
-                and b.get("text", "").strip() in text
-                or text in b.get("text", "")
-            ):
-                c["block_id"] = b.get("block_id")
-                break
 
 
 class ComplianceAnalysisAgent:
@@ -463,7 +543,12 @@ class ComplianceAnalysisAgent:
                 "compliance_clauses_fallback",
                 extra={"event": "clauses_from_blocks", "count": len(data["clauses"])},
             )
-        _map_clauses_to_blocks(data.get("clauses", []), blocks)
+        clauses = data.get("clauses", []) or []
+        issues = data.get("issues", []) or []
+        _map_clauses_to_blocks(clauses, blocks)
+        _map_issues_to_blocks(issues, blocks)
+        data["clauses"] = clauses
+        data["issues"] = issues
 
         # 5) Per-clause citations for non-LOW risk clauses with implications (level-specific)
         max_clauses_citations = limits["max_clauses_citations"]
