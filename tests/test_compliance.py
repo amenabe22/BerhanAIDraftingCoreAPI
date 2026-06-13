@@ -682,6 +682,258 @@ def test_clause_analysis_new_fields_populated():
     assert c.recommendations == ["Add liability cap", "Consult counsel"]
 
 
+# ---------------------------------------------------------------------------
+# EditorFixSpec — schema and normalization
+# ---------------------------------------------------------------------------
+
+
+def test_editor_fix_spec_validates():
+    from app.models.drafting.compliance import EditorFixLegalBasis, EditorFixSpec
+
+    fix = EditorFixSpec(
+        action="replace",
+        block_id="b1",
+        current_text="Vague compensation terms.",
+        problem_summary="Compensation is not specified clearly.",
+        legal_requirement="Wages must be stated in the contract.",
+        rewrite_directive="State salary amount and payment frequency explicitly.",
+        suggested_text="The Employee shall receive [AMOUNT] ETB monthly.",
+        severity="high_risk",
+        confidence=0.85,
+        legal_basis=[
+            EditorFixLegalBasis(
+                source="ethiopian-labor-proclamation",
+                article="Section on wages",
+                rationale="Wages must be clear.",
+            )
+        ],
+    )
+    assert fix.action == "replace"
+    assert fix.confidence == 0.85
+
+
+def test_clause_analysis_editor_fix_optional():
+    from app.models.drafting.compliance import ClauseAnalysis, EditorFixSpec
+
+    fix = EditorFixSpec(
+        action="replace",
+        block_id="b1",
+        current_text="Old text.",
+        problem_summary="Problem.",
+        legal_requirement="Requirement.",
+        rewrite_directive="Rewrite explicitly.",
+        suggested_text="New text.",
+        severity="high_risk",
+        confidence=0.9,
+    )
+    c = ClauseAnalysis(
+        clause_id="c1",
+        text="Old text.",
+        risk_level="HIGH",
+        editor_fix=fix,
+    )
+    assert c.editor_fix is not None
+    assert c.editor_fix.suggested_text == "New text."
+
+    c2 = ClauseAnalysis(clause_id="c2", text="Fine.", risk_level="LOW")
+    assert c2.editor_fix is None
+
+
+def test_build_analysis_prompt_includes_editor_fix():
+    from app.services.drafting.compliance.analysis_agent import _build_analysis_prompt
+
+    prompt = _build_analysis_prompt(
+        full_text="Compensation clause.",
+        blocks=[{"block_id": "b1", "type": "paragraph", "text": "Compensation."}],
+        legal_context="",
+        document_type="Employment Agreement",
+        language="en",
+    )
+    assert "editor_fix" in prompt
+    assert "HIGH or CRITICAL" in prompt
+    assert '"editor_fix": null' in prompt or "editor_fix\": null" in prompt
+
+
+def test_normalize_editor_fix_enriches_current_text_from_block():
+    from app.services.drafting.compliance.analysis_agent import _normalize_editor_fix
+
+    blocks = [
+        {
+            "block_id": "b1",
+            "text": "The Employee's compensation may include benefits as defined internally by the Company.",
+            "type": "paragraph",
+        }
+    ]
+    clause = {
+        "clause_id": "c1",
+        "text": "Compensation excerpt.",
+        "risk_level": "HIGH",
+        "block_id": "b1",
+        "citations": [],
+    }
+    raw = {
+        "action": "replace",
+        "block_id": "b1",
+        "problem_summary": "Vague compensation terms.",
+        "legal_requirement": "State wages clearly.",
+        "rewrite_directive": "Specify salary and benefits explicitly.",
+        "suggested_text": "The Employee shall receive [AMOUNT] ETB monthly.",
+        "confidence": 0.85,
+    }
+    fix = _normalize_editor_fix(raw, clause, blocks, "en")
+    assert fix is not None
+    assert fix.current_text == blocks[0]["text"]
+    assert fix.block_id == "b1"
+    assert fix.severity == "high_risk"
+
+
+def test_normalize_editor_fix_strips_for_medium_clause():
+    from app.services.drafting.compliance.analysis_agent import _normalize_editor_fix
+
+    clause = {"clause_id": "c1", "text": "Clause.", "risk_level": "MEDIUM", "block_id": "b1"}
+    raw = {
+        "problem_summary": "Issue.",
+        "rewrite_directive": "Fix it.",
+        "suggested_text": "Fixed text.",
+    }
+    assert _normalize_editor_fix(raw, clause, [], "en") is None
+
+
+def test_normalize_editor_fix_returns_none_when_incomplete():
+    from app.services.drafting.compliance.analysis_agent import _normalize_editor_fix
+
+    clause = {"clause_id": "c1", "text": "Clause.", "risk_level": "HIGH", "block_id": None}
+    raw = {"problem_summary": "Issue.", "rewrite_directive": "Fix it."}
+    assert _normalize_editor_fix(raw, clause, [], "en") is None
+
+
+def test_normalize_editor_fix_legal_basis_from_citations():
+    from app.services.drafting.compliance.analysis_agent import _normalize_editor_fix
+
+    clause = {
+        "clause_id": "c1",
+        "text": "Clause.",
+        "risk_level": "CRITICAL",
+        "block_id": None,
+        "citations": [
+            {
+                "document_id": "Civil Code",
+                "item_id": "2035",
+                "title": "Liability",
+                "excerpt": "Limits apply.",
+            }
+        ],
+    }
+    raw = {
+        "problem_summary": "Unlimited liability.",
+        "legal_requirement": "Cap liability.",
+        "rewrite_directive": "Add a liability cap.",
+        "suggested_text": "Liability shall not exceed [AMOUNT] ETB.",
+        "confidence": 0.9,
+    }
+    fix = _normalize_editor_fix(raw, clause, [], "en")
+    assert fix is not None
+    assert fix.severity == "critical_risk"
+    assert len(fix.legal_basis) == 1
+    assert fix.legal_basis[0].source == "Civil Code"
+    assert fix.legal_basis[0].article == "2035"
+
+
+def test_to_clause_reads_editor_fix_from_llm_dict():
+    """Integration: HIGH clause with editor_fix is parsed and returned in response."""
+    from unittest.mock import MagicMock, patch
+
+    from langchain_core.documents import Document
+
+    from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
+
+    llm_json = """
+    {
+      "document_type": "Employment Agreement",
+      "summary": "Test.",
+      "clauses": [
+        {
+          "clause_id": "c1",
+          "text": "Compensation excerpt.",
+          "risk_level": "HIGH",
+          "implications": "Vague compensation.",
+          "block_id": "b1",
+          "citations": [],
+          "ethiopian_law_implications": ["Labor law requires clear wages"],
+          "recommendations": ["Clarify compensation"],
+          "editor_fix": {
+            "action": "replace",
+            "block_id": "b1",
+            "clause_reference": "4. Compensation",
+            "current_text": "Compensation excerpt.",
+            "problem_summary": "Compensation terms are vague.",
+            "offending_phrases": ["as defined internally by the Company"],
+            "legal_requirement": "Employment terms must specify wages clearly.",
+            "rewrite_directive": "Rewrite to state salary, payment frequency, and benefits explicitly.",
+            "remove_phrases": ["as defined internally by the Company"],
+            "add_elements": ["base salary", "payment frequency"],
+            "suggested_text": "The Employee shall receive a monthly base salary of [AMOUNT] ETB.",
+            "placeholder_policy": "use_bracketed_placeholders_when_values_unknown",
+            "legal_basis": [{"source": "ethiopian-labor-proclamation", "article": "wages", "rationale": "Wages must be clear."}],
+            "document_language": "en",
+            "severity": "high_risk",
+            "confidence": 0.85
+          }
+        }
+      ],
+      "issues": [],
+      "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
+      "recommendations": [],
+      "should_sign": null,
+      "critical_issues": [],
+      "missing_clauses": []
+    }
+    """
+    blocks = [
+        {
+            "block_id": "b1",
+            "text": "The Employee's compensation may include benefits as defined internally by the Company.",
+            "type": "paragraph",
+        }
+    ]
+    with (
+        patch(
+            "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
+            return_value=["q"],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.search_legal_knowledge",
+            return_value=[
+                Document(
+                    page_content="Law.",
+                    metadata={"document_id": "Code", "item_id": "1", "title": "T"},
+                ),
+            ],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.rerank_with_llm",
+            return_value=[
+                Document(
+                    page_content="Law.",
+                    metadata={"document_id": "Code", "item_id": "1", "title": "T"},
+                ),
+            ],
+        ),
+        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+    ):
+        mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
+        agent = ComplianceAnalysisAgent()
+        resp = agent.analyze_document(document_blocks=blocks, language="en")
+
+    assert len(resp.clauses) == 1
+    clause = resp.clauses[0]
+    assert clause.editor_fix is not None
+    assert clause.editor_fix.rewrite_directive.startswith("Rewrite")
+    assert clause.editor_fix.current_text == blocks[0]["text"]
+    assert clause.editor_fix.block_id == "b1"
+    assert "[AMOUNT]" in clause.editor_fix.suggested_text
+
+
 def test_to_clause_reads_new_fields_from_llm_dict():
     """to_clause() builder correctly maps new fields from LLM response dict."""
     from unittest.mock import MagicMock, patch

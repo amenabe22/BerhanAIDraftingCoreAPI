@@ -13,6 +13,8 @@ from app.logging_config import get_logger
 from app.models.drafting.compliance import (
     ClauseAnalysis,
     ComplianceAnalysisResponse,
+    EditorFixLegalBasis,
+    EditorFixSpec,
     EthiopianLawCompliance,
     LegalCitation,
     LegalIssue,
@@ -242,6 +244,115 @@ def _map_issues_to_blocks(issues: list[dict], blocks: list[dict]) -> None:
             issue["block_id"] = matched
 
 
+def _normalize_editor_fix(
+    raw: Any,
+    clause: dict,
+    blocks: list[dict],
+    language: str,
+) -> EditorFixSpec | None:
+    """Validate and enrich LLM editor_fix for HIGH/CRITICAL clauses only."""
+    risk = (clause.get("risk_level") or "").upper()
+    if risk not in ("HIGH", "CRITICAL"):
+        return None
+    if not raw or not isinstance(raw, dict):
+        return None
+
+    rewrite_directive = (raw.get("rewrite_directive") or "").strip()
+    suggested_text = (raw.get("suggested_text") or "").strip()
+    problem_summary = (raw.get("problem_summary") or "").strip()
+    if not rewrite_directive or not suggested_text or not problem_summary:
+        log.warning(
+            "editor_fix_incomplete",
+            extra={"event": "editor_fix_incomplete", "clause_id": clause.get("clause_id")},
+        )
+        return None
+
+    valid_ids = _valid_block_ids(blocks)
+    block_id: str | None = None
+    clause_bid = clause.get("block_id")
+    if clause_bid and str(clause_bid) in valid_ids:
+        block_id = str(clause_bid)
+    else:
+        raw_bid = raw.get("block_id")
+        if raw_bid and str(raw_bid) in valid_ids:
+            block_id = str(raw_bid)
+
+    current_text = (raw.get("current_text") or clause.get("text") or "").strip()
+    if block_id:
+        for b in blocks:
+            if str(b.get("block_id")) == block_id:
+                block_text = (b.get("text") or "").strip()
+                if block_text:
+                    current_text = block_text
+                break
+
+    legal_basis: list[EditorFixLegalBasis] = []
+    for lb in raw.get("legal_basis") or []:
+        if isinstance(lb, dict) and (lb.get("source") or "").strip():
+            legal_basis.append(
+                EditorFixLegalBasis(
+                    source=str(lb.get("source", "")).strip(),
+                    article=str(lb.get("article", "") or "").strip(),
+                    rationale=str(lb.get("rationale", "") or "").strip(),
+                )
+            )
+    if not legal_basis:
+        for cit in clause.get("citations") or []:
+            if not isinstance(cit, dict):
+                continue
+            doc_id = str(cit.get("document_id", "") or "").strip()
+            item_id = str(cit.get("item_id", "") or "").strip()
+            if doc_id or item_id:
+                legal_basis.append(
+                    EditorFixLegalBasis(
+                        source=doc_id or "ethiopian-law",
+                        article=item_id,
+                        rationale=str(cit.get("excerpt") or cit.get("title") or "")[:500],
+                    )
+                )
+
+    severity = "critical_risk" if risk == "CRITICAL" else "high_risk"
+    try:
+        confidence = float(raw.get("confidence", 0.8))
+        confidence = max(0.0, min(1.0, confidence))
+    except (TypeError, ValueError):
+        confidence = 0.8
+
+    placeholder = raw.get("placeholder_policy") or "use_bracketed_placeholders_when_values_unknown"
+    if placeholder != "use_bracketed_placeholders_when_values_unknown":
+        placeholder = "use_bracketed_placeholders_when_values_unknown"
+
+    try:
+        return EditorFixSpec(
+            action="replace",
+            block_id=block_id,
+            clause_reference=str(raw.get("clause_reference") or "").strip(),
+            current_text=current_text,
+            problem_summary=problem_summary,
+            offending_phrases=[str(x) for x in (raw.get("offending_phrases") or []) if x],
+            legal_requirement=str(raw.get("legal_requirement") or "").strip(),
+            rewrite_directive=rewrite_directive,
+            remove_phrases=[str(x) for x in (raw.get("remove_phrases") or []) if x],
+            add_elements=[str(x) for x in (raw.get("add_elements") or []) if x],
+            suggested_text=suggested_text,
+            placeholder_policy=placeholder,
+            legal_basis=legal_basis,
+            document_language=str(raw.get("document_language") or language or "en"),
+            severity=str(raw.get("severity") or severity),
+            confidence=confidence,
+        )
+    except Exception as e:
+        log.warning(
+            "editor_fix_validation_failed",
+            extra={
+                "event": "editor_fix_validation_failed",
+                "clause_id": clause.get("clause_id"),
+                "error": str(e),
+            },
+        )
+        return None
+
+
 def _build_analysis_prompt(
     full_text: str,
     blocks: list[dict],
@@ -286,11 +397,13 @@ When tying clauses or issues to the document, set block_id to one of the block_i
 
 IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
+For clauses with risk_level HIGH or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW and MEDIUM clauses, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."
+
 Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
 {{
   "document_type": "string (detected or given)",
   "summary": "string (executive summary)",
-  "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [], "ethiopian_law_implications": ["string"], "recommendations": ["string"] }}],
+  "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [], "ethiopian_law_implications": ["string"], "recommendations": ["string"], "editor_fix": null or {{ "action": "replace", "block_id": "string or null", "clause_reference": "string", "current_text": "string", "problem_summary": "string", "offending_phrases": ["string"], "legal_requirement": "string", "rewrite_directive": "string", "remove_phrases": ["string"], "add_elements": ["string"], "suggested_text": "string", "placeholder_policy": "use_bracketed_placeholders_when_values_unknown", "legal_basis": [{{ "source": "string", "article": "string", "rationale": "string" }}], "document_language": "string", "severity": "high_risk or critical_risk", "confidence": 0.0 to 1.0 }} }}],
   "issues": [{{ "issue_id": "string", "description": "string", "severity": "LOW|MEDIUM|HIGH|CRITICAL", "block_id": "string or null", "citations": [] }}],
   "ethiopian_law_compliance": {{ "summary": "string", "applicable_laws": ["string"], "concerns": ["string"] }},
   "recommendations": ["string"],
@@ -684,6 +797,7 @@ class ComplianceAnalysisAgent:
                 citations=_filter_citations(c.get("citations", [])),
                 ethiopian_law_implications=c.get("ethiopian_law_implications", []) or [],
                 recommendations=c.get("recommendations", []) or [],
+                editor_fix=_normalize_editor_fix(c.get("editor_fix"), c, blocks, language),
             )
 
         return ComplianceAnalysisResponse(

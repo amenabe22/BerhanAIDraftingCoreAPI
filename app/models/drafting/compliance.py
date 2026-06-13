@@ -47,6 +47,37 @@ class LegalIssue(BaseModel):
     citations: list[LegalCitation] = Field(default_factory=list)
 
 
+class EditorFixLegalBasis(BaseModel):
+    """Legal basis for an editor fix action."""
+
+    source: str = Field(description="Legal source name (e.g. ethiopian-labor-proclamation).")
+    article: str = Field(default="", description="Article or section reference.")
+    rationale: str = Field(default="", description="Why this law requires the fix.")
+
+
+class EditorFixSpec(BaseModel):
+    """Structured edit spec for the semantic editor. Separate from human-readable analysis."""
+
+    action: Literal["replace"] = Field(description="Edit action type.")
+    block_id: str | None = Field(default=None, description="Target document block id.")
+    clause_reference: str = Field(default="", description="Human-readable clause label.")
+    current_text: str = Field(description="Current clause or block text.")
+    problem_summary: str = Field(description="Brief summary of the compliance problem.")
+    offending_phrases: list[str] = Field(default_factory=list)
+    legal_requirement: str = Field(description="What the law requires in this area.")
+    rewrite_directive: str = Field(description="Imperative instruction for rewriting the clause.")
+    remove_phrases: list[str] = Field(default_factory=list)
+    add_elements: list[str] = Field(default_factory=list)
+    suggested_text: str = Field(description="Concrete draft replacement text.")
+    placeholder_policy: Literal["use_bracketed_placeholders_when_values_unknown"] = (
+        "use_bracketed_placeholders_when_values_unknown"
+    )
+    legal_basis: list[EditorFixLegalBasis] = Field(default_factory=list)
+    document_language: str = Field(default="en")
+    severity: str = Field(description="e.g. high_risk | critical_risk")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence in the fix spec.")
+
+
 class ClauseAnalysis(BaseModel):
     """Analysis of a single clause or section."""
 
@@ -63,6 +94,10 @@ class ClauseAnalysis(BaseModel):
     recommendations: list[str] = Field(
         default_factory=list,
         description="Actionable recommendations to address risk in this clause (populated for non-LOW risk clauses).",
+    )
+    editor_fix: EditorFixSpec | None = Field(
+        default=None,
+        description="Structured edit spec for semantic editor. Populated for HIGH/CRITICAL clauses only.",
     )
 
 

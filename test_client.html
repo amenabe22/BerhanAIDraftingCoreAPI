@@ -471,6 +471,15 @@
           if (c.implications && c.implications.trim()) {
             html += '<div style="margin-bottom:0.5rem"><strong style="color:#64748b">Implications</strong><div style="margin-top:0.25rem;color:#475569">' + (c.implications || '').replace(/</g, '&lt;') + '</div></div>';
           }
+          if (c.editor_fix && c.editor_fix.suggested_text) {
+            html += '<div style="margin-bottom:0.5rem;padding:0.5rem;border-left:3px solid #b91c1c;background:#fef2f2">';
+            html += '<strong style="color:#991b1b">Editor fix</strong>';
+            if (c.editor_fix.rewrite_directive) {
+              html += '<div style="margin-top:0.25rem;color:#7f1d1d;font-size:0.9em"><em>' + String(c.editor_fix.rewrite_directive).replace(/</g, '&lt;') + '</em></div>';
+            }
+            html += '<div style="margin-top:0.35rem;white-space:pre-wrap;color:#1e293b">' + String(c.editor_fix.suggested_text).replace(/</g, '&lt;') + '</div>';
+            html += '</div>';
+          }
           if (c.citations && c.citations.length) {
             html += '<div style="margin-top:0.5rem"><strong style="color:#64748b">Citations</strong>';
             c.citations.forEach(cit => {

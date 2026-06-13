@@ -61,6 +61,42 @@ Each element of `clauses` has:
 | `implications` | string   | Legal implications of the clause. |
 | `block_id`     | string \| null | Block id from the document, if the clause was mapped to a block; otherwise `null`. |
 | `citations`    | array    | Per-clause legal citations (list of [Citation](#citation-object) objects). May be empty. |
+| `ethiopian_law_implications` | array | Specific Ethiopian law implications (populated for MEDIUM+ risk). |
+| `recommendations` | array | Human-facing actionable recommendations (populated for MEDIUM+ risk). |
+| `editor_fix`   | object \| null | Structured edit spec for the semantic editor. Populated for **HIGH** and **CRITICAL** clauses only; `null` otherwise. See [Editor fix object](#editor-fix-object). |
+
+### Editor fix object
+
+Present on `clauses[].editor_fix` when `risk_level` is `HIGH` or `CRITICAL`. Separate from human-readable `recommendations` — intended for automated document edits.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `action` | string | Edit action. Currently `"replace"`. |
+| `block_id` | string \| null | Target document block to edit. |
+| `clause_reference` | string | Human-readable clause label (e.g. `"4. Compensation"`). |
+| `current_text` | string | Current clause or block text (enriched from document blocks when `block_id` is set). |
+| `problem_summary` | string | Brief summary of the compliance problem. |
+| `offending_phrases` | array | Phrases in the current text that cause the issue. |
+| `legal_requirement` | string | What Ethiopian law requires in this area. |
+| `rewrite_directive` | string | Imperative instruction for rewriting (not a restatement of law). |
+| `remove_phrases` | array | Phrases to remove from the clause. |
+| `add_elements` | array | Elements that must appear in the rewritten clause. |
+| `suggested_text` | string | Concrete draft replacement text; uses `[BRACKETED_PLACEHOLDERS]` when values are unknown. |
+| `placeholder_policy` | string | Always `"use_bracketed_placeholders_when_values_unknown"`. |
+| `legal_basis` | array | List of [Legal basis](#legal-basis-object) objects. |
+| `document_language` | string | Language code for the fix (matches request `language`). |
+| `severity` | string | `"high_risk"` or `"critical_risk"`. |
+| `confidence` | number | Confidence score from 0.0 to 1.0. |
+
+### Legal basis object
+
+Used in `editor_fix.legal_basis`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | string | Legal source name (e.g. `"ethiopian-labor-proclamation"`, `"Civil Code"`). |
+| `article` | string | Article or section reference. |
+| `rationale` | string | Why this law requires the fix. |
 
 ### Issue object
 
@@ -110,7 +146,44 @@ Used in `citations`, and in each clause’s and issue’s `citations`:
       "risk_level": "LOW",
       "implications": "Standard party identification.",
       "block_id": "abc-123",
-      "citations": []
+      "citations": [],
+      "ethiopian_law_implications": [],
+      "recommendations": [],
+      "editor_fix": null
+    },
+    {
+      "clause_id": "4",
+      "text": "The Employee's compensation may include benefits as defined internally by the Company.",
+      "risk_level": "HIGH",
+      "implications": "Compensation terms are vague and may be unenforceable.",
+      "block_id": "def-456",
+      "citations": [],
+      "ethiopian_law_implications": ["Labor law requires clear wage terms"],
+      "recommendations": ["Specify salary amount and payment schedule"],
+      "editor_fix": {
+        "action": "replace",
+        "block_id": "def-456",
+        "clause_reference": "4. Compensation",
+        "current_text": "The Employee's compensation may include benefits as defined internally by the Company.",
+        "problem_summary": "Compensation terms are vague and may be unenforceable under Ethiopian employment law.",
+        "offending_phrases": ["as defined internally by the Company"],
+        "legal_requirement": "Employment terms must clearly specify wages, benefits, and material compensation components.",
+        "rewrite_directive": "Rewrite the clause to state salary amount, payment schedule, and benefits in explicit contractual language.",
+        "remove_phrases": ["as defined internally by the Company"],
+        "add_elements": ["base salary or salary band", "payment frequency", "other benefits in writing"],
+        "suggested_text": "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]. Other benefits shall be specified in an annex to this Contract.",
+        "placeholder_policy": "use_bracketed_placeholders_when_values_unknown",
+        "legal_basis": [
+          {
+            "source": "ethiopian-labor-proclamation",
+            "article": "Section on wages and working conditions",
+            "rationale": "Wages and benefits must be stated clearly in the contract."
+          }
+        ],
+        "document_language": "en",
+        "severity": "high_risk",
+        "confidence": 0.85
+      }
     }
   ],
   "issues_by_block_id": {},
