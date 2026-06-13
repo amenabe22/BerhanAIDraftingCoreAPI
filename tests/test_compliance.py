@@ -750,7 +750,7 @@ def test_build_analysis_prompt_includes_editor_fix():
         language="en",
     )
     assert "editor_fix" in prompt
-    assert "HIGH or CRITICAL" in prompt
+    assert "MEDIUM, HIGH, or CRITICAL" in prompt
     assert '"editor_fix": null' in prompt or "editor_fix\": null" in prompt
 
 
@@ -787,10 +787,26 @@ def test_normalize_editor_fix_enriches_current_text_from_block():
     assert fix.severity == "high_risk"
 
 
-def test_normalize_editor_fix_strips_for_medium_clause():
+def test_normalize_editor_fix_accepts_medium_clause():
     from app.services.drafting.compliance.analysis_agent import _normalize_editor_fix
 
     clause = {"clause_id": "c1", "text": "Clause.", "risk_level": "MEDIUM", "block_id": "b1"}
+    raw = {
+        "problem_summary": "Minor ambiguity.",
+        "legal_requirement": "Terms should be explicit.",
+        "rewrite_directive": "Clarify the liability cap amount.",
+        "suggested_text": "Liability shall not exceed [AMOUNT] ETB.",
+        "confidence": 0.75,
+    }
+    fix = _normalize_editor_fix(raw, clause, [], "en")
+    assert fix is not None
+    assert fix.severity == "medium_risk"
+
+
+def test_normalize_editor_fix_strips_for_low_clause():
+    from app.services.drafting.compliance.analysis_agent import _normalize_editor_fix
+
+    clause = {"clause_id": "c1", "text": "Clause.", "risk_level": "LOW", "block_id": "b1"}
     raw = {
         "problem_summary": "Issue.",
         "rewrite_directive": "Fix it.",

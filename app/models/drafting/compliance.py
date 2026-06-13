@@ -74,7 +74,7 @@ class EditorFixSpec(BaseModel):
     )
     legal_basis: list[EditorFixLegalBasis] = Field(default_factory=list)
     document_language: str = Field(default="en")
-    severity: str = Field(description="e.g. high_risk | critical_risk")
+    severity: str = Field(description="e.g. medium_risk | high_risk | critical_risk")
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence in the fix spec.")
 
 
@@ -97,7 +97,7 @@ class ClauseAnalysis(BaseModel):
     )
     editor_fix: EditorFixSpec | None = Field(
         default=None,
-        description="Structured edit spec for semantic editor. Populated for HIGH/CRITICAL clauses only.",
+        description="Structured edit spec for semantic editor. Populated for MEDIUM+ (warning and above) clauses; null for LOW.",
     )
 
 

@@ -250,9 +250,9 @@ def _normalize_editor_fix(
     blocks: list[dict],
     language: str,
 ) -> EditorFixSpec | None:
-    """Validate and enrich LLM editor_fix for HIGH/CRITICAL clauses only."""
+    """Validate and enrich LLM editor_fix for MEDIUM+ (warning and above) clauses."""
     risk = (clause.get("risk_level") or "").upper()
-    if risk not in ("HIGH", "CRITICAL"):
+    if risk not in ("MEDIUM", "HIGH", "CRITICAL"):
         return None
     if not raw or not isinstance(raw, dict):
         return None
@@ -311,7 +311,12 @@ def _normalize_editor_fix(
                     )
                 )
 
-    severity = "critical_risk" if risk == "CRITICAL" else "high_risk"
+    severity_map = {
+        "CRITICAL": "critical_risk",
+        "HIGH": "high_risk",
+        "MEDIUM": "medium_risk",
+    }
+    severity = severity_map.get(risk, "medium_risk")
     try:
         confidence = float(raw.get("confidence", 0.8))
         confidence = max(0.0, min(1.0, confidence))
@@ -397,13 +402,13 @@ When tying clauses or issues to the document, set block_id to one of the block_i
 
 IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
-For clauses with risk_level HIGH or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW and MEDIUM clauses, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."
+For clauses with risk_level MEDIUM, HIGH, or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW clauses only, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Set editor_fix.severity to medium_risk for MEDIUM, high_risk for HIGH, or critical_risk for CRITICAL. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."
 
 Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
 {{
   "document_type": "string (detected or given)",
   "summary": "string (executive summary)",
-  "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [], "ethiopian_law_implications": ["string"], "recommendations": ["string"], "editor_fix": null or {{ "action": "replace", "block_id": "string or null", "clause_reference": "string", "current_text": "string", "problem_summary": "string", "offending_phrases": ["string"], "legal_requirement": "string", "rewrite_directive": "string", "remove_phrases": ["string"], "add_elements": ["string"], "suggested_text": "string", "placeholder_policy": "use_bracketed_placeholders_when_values_unknown", "legal_basis": [{{ "source": "string", "article": "string", "rationale": "string" }}], "document_language": "string", "severity": "high_risk or critical_risk", "confidence": 0.0 to 1.0 }} }}],
+  "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [], "ethiopian_law_implications": ["string"], "recommendations": ["string"], "editor_fix": null or {{ "action": "replace", "block_id": "string or null", "clause_reference": "string", "current_text": "string", "problem_summary": "string", "offending_phrases": ["string"], "legal_requirement": "string", "rewrite_directive": "string", "remove_phrases": ["string"], "add_elements": ["string"], "suggested_text": "string", "placeholder_policy": "use_bracketed_placeholders_when_values_unknown", "legal_basis": [{{ "source": "string", "article": "string", "rationale": "string" }}], "document_language": "string", "severity": "medium_risk | high_risk | critical_risk", "confidence": 0.0 to 1.0 }} }}],
   "issues": [{{ "issue_id": "string", "description": "string", "severity": "LOW|MEDIUM|HIGH|CRITICAL", "block_id": "string or null", "citations": [] }}],
   "ethiopian_law_compliance": {{ "summary": "string", "applicable_laws": ["string"], "concerns": ["string"] }},
   "recommendations": ["string"],

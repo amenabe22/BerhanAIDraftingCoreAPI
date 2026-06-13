@@ -63,11 +63,11 @@ Each element of `clauses` has:
 | `citations`    | array    | Per-clause legal citations (list of [Citation](#citation-object) objects). May be empty. |
 | `ethiopian_law_implications` | array | Specific Ethiopian law implications (populated for MEDIUM+ risk). |
 | `recommendations` | array | Human-facing actionable recommendations (populated for MEDIUM+ risk). |
-| `editor_fix`   | object \| null | Structured edit spec for the semantic editor. Populated for **HIGH** and **CRITICAL** clauses only; `null` otherwise. See [Editor fix object](#editor-fix-object). |
+| `editor_fix`   | object \| null | Structured edit spec for the semantic editor. Populated for **MEDIUM+** clauses (warnings and above); `null` for **LOW** only. See [Editor fix object](#editor-fix-object). |
 
 ### Editor fix object
 
-Present on `clauses[].editor_fix` when `risk_level` is `HIGH` or `CRITICAL`. Separate from human-readable `recommendations` — intended for automated document edits.
+Present on `clauses[].editor_fix` when `risk_level` is `MEDIUM`, `HIGH`, or `CRITICAL`. Omitted (`null`) for `LOW` clauses. Separate from human-readable `recommendations` — intended for automated document edits.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -85,7 +85,7 @@ Present on `clauses[].editor_fix` when `risk_level` is `HIGH` or `CRITICAL`. Sep
 | `placeholder_policy` | string | Always `"use_bracketed_placeholders_when_values_unknown"`. |
 | `legal_basis` | array | List of [Legal basis](#legal-basis-object) objects. |
 | `document_language` | string | Language code for the fix (matches request `language`). |
-| `severity` | string | `"high_risk"` or `"critical_risk"`. |
+| `severity` | string | `"medium_risk"` (MEDIUM), `"high_risk"` (HIGH), or `"critical_risk"` (CRITICAL). |
 | `confidence` | number | Confidence score from 0.0 to 1.0. |
 
 ### Legal basis object
