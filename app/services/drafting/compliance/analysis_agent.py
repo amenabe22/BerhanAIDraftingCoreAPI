@@ -16,6 +16,7 @@ from app.models.drafting.compliance import (
     EditorFixLegalBasis,
     EditorFixSpec,
     EthiopianLawCompliance,
+    IssueSeverity,
     LegalCitation,
     LegalIssue,
 )
@@ -356,6 +357,55 @@ def _normalize_editor_fix(
             },
         )
         return None
+
+
+def _risk_level_to_issue_severity(risk_level: str) -> IssueSeverity:
+    """Map LLM risk levels (LOW/MEDIUM/HIGH/CRITICAL) to consumer issue severity."""
+    level = (risk_level or "LOW").upper()
+    if level in ("CRITICAL", "HIGH"):
+        return IssueSeverity.ERROR
+    if level == "MEDIUM":
+        return IssueSeverity.WARNING
+    if level == "LOW":
+        return IssueSeverity.INFO
+    return IssueSeverity.NORMAL
+
+
+def _determine_issue_type(risk_level: str, description: str) -> str:
+    """Infer issue_type from risk level and description text."""
+    text = (description or "").lower()
+    if "non-compliant" in text or "non compliant" in text:
+        return "non_compliant_clause"
+    if "missing" in text:
+        return "missing_provision"
+    if "unclear" in text or "ambiguous" in text or "vague" in text:
+        return "ambiguous_clause"
+    if "unenforceable" in text:
+        return "unenforceable_clause"
+    return f"{(risk_level or 'low').lower()}_risk"
+
+
+def _citations_to_str_list(cits: list) -> list[str]:
+    """Convert citation dicts to flat strings for legacy LegalIssue.citations."""
+    out: list[str] = []
+    for cit in cits or []:
+        if isinstance(cit, str) and cit.strip():
+            out.append(cit.strip())
+            continue
+        if not isinstance(cit, dict):
+            continue
+        doc_id = str(cit.get("document_id", "") or "").strip()
+        item_id = str(cit.get("item_id", "") or "").strip()
+        title = str(cit.get("title", "") or "").strip()
+        excerpt = str(cit.get("excerpt", "") or "").strip()
+        head = " | ".join(p for p in (doc_id, item_id, title) if p)
+        if head and excerpt:
+            out.append(f"{head}: {excerpt}")
+        elif head:
+            out.append(head)
+        elif excerpt:
+            out.append(excerpt)
+    return out
 
 
 def _build_analysis_prompt(
@@ -776,13 +826,25 @@ class ComplianceAnalysisAgent:
                     out.append(c)
             return out
 
-        def to_issue(i: dict) -> LegalIssue:
+        def to_issue(i: dict, *, block_id_override: str | None = None) -> LegalIssue:
+            raw_severity = (i.get("severity") or "LOW").upper()
+            description = str(i.get("description") or "").strip()
+            block_id = str(i.get("block_id") or block_id_override or "").strip()
+            clause_text = str(i.get("clause_text") or "").strip() or None
             return LegalIssue(
-                issue_id=i.get("issue_id", ""),
-                description=i.get("description", ""),
-                severity=i.get("severity", "MEDIUM"),
-                block_id=i.get("block_id"),
-                citations=_filter_citations(i.get("citations", [])),
+                block_id=block_id,
+                severity=_risk_level_to_issue_severity(raw_severity),
+                issue_type=str(i.get("issue_type") or _determine_issue_type(raw_severity, description)),
+                description=description,
+                risk_factors=[str(x) for x in (i.get("risk_factors") or []) if x],
+                ethiopian_law_implications=[
+                    str(x) for x in (i.get("ethiopian_law_implications") or []) if x
+                ],
+                recommendations=[str(x) for x in (i.get("recommendations") or []) if x],
+                citations=_citations_to_str_list(i.get("citations", [])),
+                clause_text=clause_text,
+                clause_excerpt=(clause_text[:120] if clause_text else None),
+                issue_id=i.get("issue_id"),
             )
 
         _emit_progress(
@@ -812,7 +874,9 @@ class ComplianceAnalysisAgent:
             compliance_score=compliance_score,
             summary=data.get("summary", ""),
             clauses=[to_clause(c) for c in data.get("clauses", [])],
-            issues_by_block_id={k: [to_issue(i) for i in v] for k, v in issues_by_block_id.items()},
+            issues_by_block_id={
+                k: [to_issue(i, block_id_override=k) for i in v] for k, v in issues_by_block_id.items()
+            },
             ethiopian_law_compliance=eth_compliance,
             recommendations=data.get("recommendations", []) or [],
             should_sign=data.get("should_sign"),

@@ -3,6 +3,7 @@
 Request accepts doc_id (from doc collection); document is loaded from Qdrant with block_id, text, type per block.
 """
 
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -37,14 +38,34 @@ class LegalCitation(BaseModel):
     excerpt: str = Field(default="", description="Relevant text excerpt.")
 
 
+class IssueSeverity(str, Enum):
+    """Severity level for legal issues (consumer-facing)."""
+
+    ERROR = "ERROR"
+    WARNING = "WARNING"
+    INFO = "INFO"
+    NORMAL = "NORMAL"
+
+
 class LegalIssue(BaseModel):
     """A compliance or legal issue identified in the document."""
 
-    issue_id: str = Field(description="Unique id for this issue.")
+    block_id: str = Field(description="Block id where the issue was found.")
+    severity: IssueSeverity = Field(description="ERROR | WARNING | INFO | NORMAL")
+    issue_type: str = Field(
+        description="Type of issue (e.g. non_compliant_clause, missing_provision, medium_risk)."
+    )
     description: str = Field(description="Description of the issue.")
-    severity: str = Field(description="LOW | MEDIUM | HIGH | CRITICAL")
-    block_id: str | None = Field(default=None, description="Block id if tied to a clause.")
-    citations: list[LegalCitation] = Field(default_factory=list)
+    risk_factors: list[str] = Field(default_factory=list)
+    ethiopian_law_implications: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    citations: list[str] = Field(
+        default_factory=list,
+        description="Flat citation strings for display (legacy consumer format).",
+    )
+    clause_text: str | None = Field(default=None, description="Exact clause text when available.")
+    clause_excerpt: str | None = Field(default=None, description="Short clause excerpt.")
+    issue_id: str | None = Field(default=None, description="Optional unique id from analysis.")
 
 
 class EditorFixLegalBasis(BaseModel):

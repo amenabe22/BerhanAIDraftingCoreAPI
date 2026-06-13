@@ -100,15 +100,21 @@ Used in `editor_fix.legal_basis`:
 
 ### Issue object
 
-Used in `issues_by_block_id` and `critical_issues`:
+Used in `issues_by_block_id` and serialized in `critical_issues`:
 
 | Field         | Type     | Description |
 |---------------|----------|-------------|
-| `issue_id`    | string   | Unique id for the issue. |
+| `block_id`    | string   | Block id where the issue was found. |
+| `severity`    | string   | One of: `"ERROR"`, `"WARNING"`, `"INFO"`, `"NORMAL"`. Mapped from LLM risk levels: CRITICAL/HIGH → ERROR, MEDIUM → WARNING, LOW → INFO. |
+| `issue_type`  | string   | Issue category (e.g. `"non_compliant_clause"`, `"ambiguous_clause"`, `"medium_risk"`). |
 | `description` | string   | Description of the issue. |
-| `severity`    | string   | One of: `"LOW"`, `"MEDIUM"`, `"HIGH"`, `"CRITICAL"`. |
-| `block_id`    | string \| null | Block id if the issue is tied to a specific clause; otherwise `null`. |
-| `citations`   | array    | List of [Citation](#citation-object) objects. |
+| `risk_factors` | array   | Optional risk factor strings. |
+| `ethiopian_law_implications` | array | Optional Ethiopian law implications. |
+| `recommendations` | array | Optional fix recommendations. |
+| `citations`   | array    | Flat citation strings for display. |
+| `clause_text` | string \| null | Exact clause text when available. |
+| `clause_excerpt` | string \| null | Short clause excerpt. |
+| `issue_id`    | string \| null | Optional id from the analysis pass. |
 
 ### Citation object
 

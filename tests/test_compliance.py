@@ -823,6 +823,90 @@ def test_normalize_editor_fix_returns_none_when_incomplete():
     assert _normalize_editor_fix(raw, clause, [], "en") is None
 
 
+def test_risk_level_to_issue_severity_mapping():
+    from app.models.drafting.compliance import IssueSeverity
+    from app.services.drafting.compliance.analysis_agent import _risk_level_to_issue_severity
+
+    assert _risk_level_to_issue_severity("CRITICAL") == IssueSeverity.ERROR
+    assert _risk_level_to_issue_severity("HIGH") == IssueSeverity.ERROR
+    assert _risk_level_to_issue_severity("MEDIUM") == IssueSeverity.WARNING
+    assert _risk_level_to_issue_severity("LOW") == IssueSeverity.INFO
+    assert _risk_level_to_issue_severity("BOGUS") == IssueSeverity.NORMAL
+
+
+def test_determine_issue_type_from_description():
+    from app.services.drafting.compliance.analysis_agent import _determine_issue_type
+
+    assert _determine_issue_type("HIGH", "This clause is non-compliant with labor law") == "non_compliant_clause"
+    assert _determine_issue_type("MEDIUM", "Missing termination notice period") == "missing_provision"
+    assert _determine_issue_type("LOW", "Some issue") == "low_risk"
+
+
+def test_analyze_document_maps_issues_for_advisor_schema():
+    from unittest.mock import MagicMock, patch
+
+    from langchain_core.documents import Document
+
+    from app.models.drafting.compliance import IssueSeverity
+    from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
+
+    llm_json = """
+    {
+      "document_type": "Contract",
+      "summary": "Test.",
+      "clauses": [{"clause_id": "c1", "text": "Clause.", "risk_level": "LOW", "implications": "", "block_id": "b1", "citations": [], "ethiopian_law_implications": [], "recommendations": [], "editor_fix": null}],
+      "issues": [
+        {"issue_id": "issue_1", "description": "Vague liability cap", "severity": "MEDIUM", "block_id": "b1", "citations": []},
+        {"issue_id": "issue_2", "description": "Critical non-compliant termination", "severity": "CRITICAL", "block_id": "b1", "citations": []}
+      ],
+      "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
+      "recommendations": [],
+      "should_sign": null,
+      "critical_issues": [],
+      "missing_clauses": []
+    }
+    """
+    with (
+        patch(
+            "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
+            return_value=["q"],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.search_legal_knowledge",
+            return_value=[
+                Document(
+                    page_content="Law.",
+                    metadata={"document_id": "Code", "item_id": "1", "title": "T"},
+                ),
+            ],
+        ),
+        patch(
+            "app.services.drafting.compliance.analysis_agent.rerank_with_llm",
+            return_value=[
+                Document(
+                    page_content="Law.",
+                    metadata={"document_id": "Code", "item_id": "1", "title": "T"},
+                ),
+            ],
+        ),
+        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+    ):
+        mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
+        agent = ComplianceAnalysisAgent()
+        resp = agent.analyze_document(
+            document_blocks=[{"block_id": "b1", "text": "Clause.", "type": "paragraph"}],
+            language="en",
+        )
+
+    assert "b1" in resp.issues_by_block_id
+    issues = resp.issues_by_block_id["b1"]
+    assert len(issues) == 2
+    assert issues[0].severity == IssueSeverity.WARNING
+    assert issues[0].issue_type
+    assert issues[1].severity == IssueSeverity.ERROR
+    assert issues[0].block_id == "b1"
+
+
 def test_normalize_editor_fix_legal_basis_from_citations():
     from app.services.drafting.compliance.analysis_agent import _normalize_editor_fix
 
