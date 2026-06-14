@@ -48,9 +48,29 @@ def _emit_progress(
     progress_callback({"phase": phase, "percent": p, "message": message})
 
 
-# Checklist for the analysis prompt (reduce missed issues)
+# Checklist for the analysis prompt (aligned with BerhanAdvisorCoreAPI compliance_rules)
 COMPLIANCE_CHECKLIST = """
-Consider at least: jurisdiction and governing law, contract type, parties' obligations, liability and limitation of liability, termination and notice, confidentiality, IP and assignment, dispute resolution and venue, mandatory law (Ethiopian), missing standard clauses for this document type, unfair terms.""".strip()
+Consider at least: jurisdiction and governing law, contract type, parties' obligations, liability and limitation of liability, termination and notice, confidentiality, IP and assignment, dispute resolution and venue, mandatory law (Ethiopian), missing standard clauses for this document type, unfair terms.
+
+Ethiopian legal framework:
+- Ethiopian Commercial Code (Proclamation No. 1243/2021)
+- Ethiopian Civil Code (1960)
+- Ethiopian Labor Law (Proclamation No. 1156/2019)
+- Ethiopian Investment Law (Proclamation No. 1180/2020)
+- Ethiopian Constitution (1995)
+
+Critical prohibitions:
+- NO foreign governing law - MUST use Ethiopian law
+- NO foreign jurisdiction clauses - MUST use Ethiopian courts
+- NO outdated Commercial Code references (166/1960) - use Proclamation No. 1243/2021
+- NO at-will employment (illegal under Proclamation No. 1156/2019)
+- Mandatory labor benefits and notice periods per Ethiopian Labor Law
+
+Flag as non-compliant: references to Proclamation No. 166/1960 or Ethiopian Commercial Code (1960) in commercial/partnership governing-law clauses; current law is Proclamation No. 1243/2021.
+
+For partnership and commercial agreements, governing law must reference Proclamation No. 1243/2021 (not 166/1960).
+Governing law must state laws of Ethiopia; jurisdiction must be Ethiopian courts.
+""".strip()
 
 
 def _extract_text_from_tiptap_node(node: dict) -> str:
