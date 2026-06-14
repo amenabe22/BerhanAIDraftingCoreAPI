@@ -452,7 +452,7 @@ When tying clauses or issues to the document, set block_id to one of the block_i
 
 IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
-For clauses with risk_level MEDIUM, HIGH, or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW clauses only, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Set editor_fix.severity to medium_risk for MEDIUM, high_risk for HIGH, or critical_risk for CRITICAL. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."
+For clauses with risk_level MEDIUM, HIGH, or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW clauses only, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. Keep every editor_fix field concise (short phrases, not paragraphs). editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Set editor_fix.severity to medium_risk for MEDIUM, high_risk for HIGH, or critical_risk for CRITICAL. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."
 
 Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
 {{
@@ -468,6 +468,20 @@ Output a single JSON object with this structure (use empty arrays only for issue
 }}
 
 Output only the JSON object, no markdown or explanation."""
+
+
+def _normalize_llm_json_text(raw: str) -> str:
+    """Strip markdown fences, preamble, and common LLM JSON formatting issues."""
+    text = raw.strip()
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    text = match.group(1).strip() if match else re.sub(r"^```(?:json)?\s*", "", text).strip()
+    text = re.sub(r"\s*```\s*$", "", text).strip()
+    brace = text.find("{")
+    if brace > 0:
+        text = text[brace:]
+    # Remove trailing commas before closing braces/brackets.
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    return text
 
 
 def _repair_truncated_json(text: str, error_pos: int) -> str | None:
@@ -508,24 +522,64 @@ def _repair_truncated_json(text: str, error_pos: int) -> str | None:
     return repaired
 
 
-def _parse_analysis_response(raw: str) -> dict[str, Any]:
-    """Parse LLM JSON response; strip markdown code block if present (closed or unclosed). Repair if truncated."""
-    text = raw.strip()
-    # Extract content inside ``` ... ``` if both fences present
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
-    text = match.group(1).strip() if match else re.sub(r"^```(?:json)?\s*", "", text).strip()
+def _try_parse_json_text(text: str) -> dict[str, Any]:
+    """Parse JSON text with repair attempts for truncated LLM output."""
     try:
-        return json.loads(text)
+        out = json.loads(text)
+        if not isinstance(out, dict):
+            raise json.JSONDecodeError("Expected JSON object", text, 0)
+        return out
     except json.JSONDecodeError as e:
-        if "Unterminated string" in e.msg or ("Expecting value" in e.msg and e.pos):
-            # Try repair at end of text first (LLM output cut off at end), then at parser position
-            for pos in (len(text), e.pos):
-                repaired = _repair_truncated_json(text, pos)
-                if repaired:
-                    try:
-                        return json.loads(repaired)
-                    except json.JSONDecodeError:
-                        continue
+        repair_positions = [len(text)]
+        if e.pos:
+            repair_positions.append(e.pos)
+        for pos in repair_positions:
+            repaired = _repair_truncated_json(text, pos)
+            if not repaired:
+                continue
+            try:
+                out = json.loads(repaired)
+                if isinstance(out, dict):
+                    return out
+            except json.JSONDecodeError:
+                continue
+        raise
+
+
+def _salvage_truncated_json(raw: str) -> dict[str, Any] | None:
+    """Best-effort recovery when the model hit max_tokens and cut off mid-object."""
+    text = _normalize_llm_json_text(raw)
+    if "{" not in text:
+        return None
+
+    # Walk backward in coarse steps, closing any open structures.
+    for end in range(len(text), max(0, len(text) - 30_000), -100):
+        chunk = text[:end].rstrip().rstrip(",")
+        repaired = _repair_truncated_json(chunk, len(chunk))
+        if not repaired:
+            continue
+        try:
+            out = json.loads(repaired)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(out, dict) and (out.get("clauses") or out.get("document_type")):
+            return out
+    return None
+
+
+def _parse_analysis_response(raw: str) -> dict[str, Any]:
+    """Parse LLM JSON response; strip markdown/preamble and repair truncated output when possible."""
+    text = _normalize_llm_json_text(raw)
+    try:
+        return _try_parse_json_text(text)
+    except json.JSONDecodeError:
+        salvaged = _salvage_truncated_json(raw)
+        if salvaged is not None:
+            log.warning(
+                "compliance_parse_salvaged",
+                extra={"event": "compliance_parse_salvaged", "raw_len": len(raw)},
+            )
+            return salvaged
         raise
 
 
@@ -656,8 +710,9 @@ class ComplianceAnalysisAgent:
             api_key=settings.OPENROUTER_API_KEY,
             model=model,
             temperature=getattr(settings, "COMPLIANCE_ANALYSIS_TEMPERATURE", 0.1),
-            max_tokens=getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 16384),
+            max_tokens=getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 32768),
             streaming=True,
+            model_kwargs={"response_format": {"type": "json_object"}},
         )
         prompt = _build_analysis_prompt(
             full_text,
@@ -694,8 +749,19 @@ class ComplianceAnalysisAgent:
         try:
             data = _parse_analysis_response(raw)
         except json.JSONDecodeError as e:
-            log.error("compliance_parse_error", extra={"error": str(e), "raw_preview": raw[:500]})
-            raise ValueError("LLM did not return valid JSON") from e
+            log.error(
+                "compliance_parse_error",
+                extra={
+                    "event": "compliance_parse_error",
+                    "error": str(e),
+                    "raw_len": len(raw),
+                    "raw_preview": raw[:500],
+                },
+            )
+            raise ValueError(
+                "Compliance analysis could not be parsed. The document may be too long for a single pass — "
+                "try again with a shorter document or a quicker check level."
+            ) from e
 
         _emit_progress(
             progress_callback,

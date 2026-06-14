@@ -557,6 +557,39 @@ def test_parse_analysis_response_truncated_repaired():
     assert out.get("summary") == "A long summary that got cut"
 
 
+def test_parse_analysis_response_strips_preamble():
+    from app.services.drafting.compliance.analysis_agent import _parse_analysis_response
+
+    raw = 'Here is the analysis:\n{"document_type": "Contract", "risk_score": 10}'
+    out = _parse_analysis_response(raw)
+    assert out["document_type"] == "Contract"
+    assert out["risk_score"] == 10
+
+
+def test_parse_analysis_response_trailing_commas():
+    from app.services.drafting.compliance.analysis_agent import _parse_analysis_response
+
+    raw = '{"document_type": "Contract", "clauses": [{"clause_id": "c1", "text": "A",},],}'
+    out = _parse_analysis_response(raw)
+    assert out["document_type"] == "Contract"
+    assert len(out["clauses"]) == 1
+
+
+def test_salvage_truncated_json_drops_incomplete_clause():
+    from app.services.drafting.compliance.analysis_agent import _salvage_truncated_json
+
+    raw = (
+        '{"document_type": "Contract", "overall_risk_level": "HIGH", "risk_score": 70, '
+        '"clauses": [{"clause_id": "c1", "text": "Complete clause", "risk_level": "LOW", "editor_fix": null}, '
+        '{"clause_id": "c2", "text": "Incomplete clause", "risk_level": "HIGH", "editor_fix": {"rewrite_directive": "Fix'
+    )
+    out = _salvage_truncated_json(raw)
+    assert out is not None
+    assert out["document_type"] == "Contract"
+    assert len(out["clauses"]) >= 1
+    assert out["clauses"][0]["clause_id"] == "c1"
+
+
 def test_validate_and_dedupe_clauses():
     from app.services.drafting.compliance.analysis_agent import _validate_and_dedupe
 

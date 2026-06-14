@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     COMPLIANCE_MAX_CLAUSES_FOR_CITATIONS: int = 20
     COMPLIANCE_ANALYSIS_TEMPERATURE: float = 0.1
     COMPLIANCE_ANALYSIS_MAX_TOKENS: int = (
-        16384  # allow long analysis JSON (clauses/issues); avoid truncation
+        32768  # editor_fix per clause increases output size; avoid truncation
     )
     COMPLIANCE_SCORE_ROUNDING: int = 2
     # Normalization ceiling for the deterministic scoring engine.
