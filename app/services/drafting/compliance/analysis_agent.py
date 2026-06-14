@@ -86,21 +86,43 @@ def _extract_text_from_tiptap_node(node: dict) -> str:
 
 
 def extract_blocks_from_tiptap(tiptap_json: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract blocks (paragraphs/sections) with optional block_id and text from TipTap JSON."""
+    """Extract blocks (paragraphs/sections) with block_id and text from TipTap JSON.
+
+    Handles multi-page document structure (page nodes wrapping paragraphs/headings)
+    and reads all common block-id attribute variants used across the codebase:
+    ``block_id`` (BerhanAdvisorCoreAPI), ``id``, and ``blockId``.
+    """
     blocks: list[dict[str, Any]] = []
+
+    def _traverse(nodes: list) -> None:
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            node_type = node.get("type", "")
+            # Recurse into container nodes without extracting them as blocks
+            if node_type in ("page", "doc"):
+                _traverse(node.get("content") or [])
+                continue
+            text = _extract_text_from_tiptap_node(node).strip()
+            attrs = node.get("attrs") or {}
+            # Prefer the explicit block_id attr used by BerhanAdvisorCoreAPI generation
+            block_id = (
+                attrs.get("block_id")
+                or attrs.get("id")
+                or attrs.get("blockId")
+                or (f"b{len(blocks)}" if text else None)
+            )
+            if text or node_type in ("heading", "paragraph", "blockquote"):
+                blocks.append({
+                    "block_id": block_id or f"b{len(blocks)}",
+                    "type": node_type,
+                    "text": text,
+                })
+
     content = tiptap_json.get("content") or []
     if not content:
         return blocks
-
-    for i, node in enumerate(content):
-        if not isinstance(node, dict):
-            continue
-        node_type = node.get("type", "")
-        text = _extract_text_from_tiptap_node(node).strip()
-        attrs = node.get("attrs") or {}
-        block_id = attrs.get("id") or attrs.get("blockId") or (f"b{i}" if text else None)
-        if text or node_type in ("heading", "paragraph", "blockquote"):
-            blocks.append({"block_id": block_id or f"b{i}", "type": node_type, "text": text})
+    _traverse(content)
     return blocks
 
 
