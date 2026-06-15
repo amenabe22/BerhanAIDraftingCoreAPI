@@ -40,7 +40,7 @@ def _compliance_llm(model: str | None = None, temperature: float | None = None) 
         model=model or settings.GEMINI_MODEL,
         temperature=temp,
         streaming=False,
-        model_kwargs={"seed": settings.COMPLIANCE_ANALYSIS_SEED},
+        seed=settings.COMPLIANCE_ANALYSIS_SEED,
     )
 
 

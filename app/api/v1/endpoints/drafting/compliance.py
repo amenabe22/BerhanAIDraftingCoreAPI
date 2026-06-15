@@ -124,6 +124,8 @@ async def analyze_compliance_stream(request: ComplianceAnalysisRequest) -> Strea
             )
         except HTTPException:
             return None
+        except Exception:
+            raise
         finally:
             asyncio.run_coroutine_threadsafe(progress_q.put(None), loop)
 
@@ -143,8 +145,12 @@ async def analyze_compliance_stream(request: ComplianceAnalysisRequest) -> Strea
             yield f"data: {json.dumps({'type': 'error', 'message': e.detail})}\n\n"
             return
         except Exception as e:
-            log.error("compliance_analyze_stream_error", extra={"error": str(e)})
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Compliance analysis failed'})}\n\n"
+            log.error(
+                "compliance_analyze_stream_error",
+                extra={"error": str(e)},
+                exc_info=True,
+            )
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e) or 'Compliance analysis failed'})}\n\n"
             return
         if result is None:
             yield f"data: {json.dumps({'type': 'error', 'message': 'Document not found or has no content'})}\n\n"

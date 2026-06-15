@@ -749,6 +749,7 @@ def _build_analysis_llm() -> ChatOpenAI:
     effort = (getattr(settings, "COMPLIANCE_REASONING_EFFORT", "") or "").strip().lower()
     if effort and effort not in ("none", "off", ""):
         extra_body["reasoning"] = {"effort": effort}
+    seed = getattr(settings, "COMPLIANCE_ANALYSIS_SEED", 7)
     kwargs: dict = {
         "base_url": "https://openrouter.ai/api/v1",
         "api_key": settings.OPENROUTER_API_KEY,
@@ -756,9 +757,9 @@ def _build_analysis_llm() -> ChatOpenAI:
         "temperature": getattr(settings, "COMPLIANCE_ANALYSIS_TEMPERATURE", 0.0),
         "max_tokens": getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 32768),
         "streaming": True,
+        "seed": seed,
         "model_kwargs": {
             "response_format": {"type": "json_object"},
-            "seed": getattr(settings, "COMPLIANCE_ANALYSIS_SEED", 7),
         },
     }
     if extra_body:
