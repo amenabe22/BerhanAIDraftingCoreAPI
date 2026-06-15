@@ -648,6 +648,55 @@ def test_map_issues_to_blocks_clears_invalid_block_id():
     assert issues[0]["block_id"] == "real-block-1"
 
 
+def test_match_block_does_not_anchor_on_and():
+    from app.services.drafting.compliance.analysis_agent import (
+        _map_issues_to_blocks,
+        _sanitize_clause_and_issue_block_ids,
+    )
+
+    description = (
+        "The document lacks a specific clause for dispute resolution and venue. "
+        "While the governing law is stated as Ethiopian, the absence of a clear "
+        "mechanism for resolving disputes can lead to uncertainty and delays."
+    )
+    blocks = [
+        {"block_id": "and-block", "text": "AND"},
+        {"block_id": "party-block", "text": "Company A and Company B agree to the terms."},
+    ]
+    issues = [{"issue_id": "i1", "description": description, "block_id": "and-block"}]
+    _map_issues_to_blocks(issues, blocks)
+    _sanitize_clause_and_issue_block_ids([], issues, blocks)
+    assert issues[0]["block_id"] is None
+
+
+def test_sanitize_clears_missing_provision_on_service_provider_label():
+    from app.services.drafting.compliance.analysis_agent import (
+        _sanitize_clause_and_issue_block_ids,
+    )
+
+    blocks = [
+        {"block_id": "label-block", "text": "SERVICE PROVIDER:"},
+        {
+            "block_id": "liability-block",
+            "text": "The Provider shall indemnify the Client for direct damages.",
+        },
+    ]
+    clauses = [
+        {
+            "clause_id": "c1",
+            "text": "Missing limitation of liability cap.",
+            "implications": (
+                "The document does not explicitly include a limitation of liability clause. "
+                "Without it, liability could be unlimited under general contract principles."
+            ),
+            "block_id": "label-block",
+            "risk_level": "HIGH",
+        }
+    ]
+    _sanitize_clause_and_issue_block_ids(clauses, [], blocks)
+    assert clauses[0]["block_id"] is None
+
+
 def test_build_analysis_prompt_includes_block_ids():
     from app.services.drafting.compliance.analysis_agent import _build_analysis_prompt
 

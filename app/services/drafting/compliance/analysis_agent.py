@@ -219,7 +219,14 @@ def _format_blocks_for_prompt(
         excerpt = text[:block_char_limit]
         if len(text) > block_char_limit:
             excerpt += "…"
-        lines.append(f"[block_id: {block_id} | type: {block_type}] {excerpt}")
+        anchor_note = (
+            " | NON-ANCHORABLE: do not assign issues/clauses to this block"
+            if _is_trivial_block_text(text)
+            else ""
+        )
+        lines.append(
+            f"[block_id: {block_id} | type: {block_type}{anchor_note}] {excerpt}"
+        )
     return "\n".join(lines) if lines else "(no structured blocks available)"
 
 
@@ -232,27 +239,138 @@ def _normalize_match_text(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").lower().strip())
 
 
+def _significant_tokens(text: str) -> set[str]:
+    stop = {
+        "the", "a", "an", "and", "or", "but", "to", "for", "of", "in", "on", "at",
+        "is", "are", "was", "were", "be", "been", "this", "that", "with", "as", "by",
+        "from", "not", "no", "it", "its", "shall", "may", "will", "can", "while",
+    }
+    tokens = re.findall(r"[a-z0-9]+", _normalize_match_text(text))
+    return {t for t in tokens if len(t) > 2 and t not in stop}
+
+
+def _text_overlap_score(a: str, b: str) -> float:
+    ta, tb = _significant_tokens(a), _significant_tokens(b)
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / min(len(ta), len(tb))
+
+
+def _is_trivial_block_text(text: str) -> bool:
+    """Blocks too short or label-like to anchor compliance highlights."""
+    norm = _normalize_match_text(text)
+    if not norm:
+        return True
+    if len(norm) < 12:
+        return True
+    words = norm.split()
+    if len(words) <= 2:
+        return True
+    if len(words) <= 3 and norm.rstrip().endswith(":"):
+        return True
+    return False
+
+
+def _looks_like_missing_provision(text: str) -> bool:
+    t = _normalize_match_text(text)
+    markers = (
+        "document lacks",
+        "document does not",
+        "is missing",
+        "absence of",
+        "missing clause",
+        "missing provision",
+        "not explicitly include",
+        "does not explicitly",
+        "without a dedicated",
+        "no specific clause",
+        "does not include",
+        "is not present",
+        "is absent",
+    )
+    return any(m in t for m in markers)
+
+
+def _validate_block_binding(text: str, block_id: str | None, blocks: list[dict]) -> str | None:
+    """Return block_id only when the block text actually supports the clause/issue."""
+    if not block_id:
+        return None
+    block = next((b for b in blocks if str(b.get("block_id")) == str(block_id)), None)
+    if not block:
+        return None
+    block_text = str(block.get("text") or "")
+    if _is_trivial_block_text(block_text):
+        return None
+    score = _text_overlap_score(text, block_text)
+    if _looks_like_missing_provision(text) and score < 0.25:
+        return None
+    if score < 0.15:
+        return None
+    norm_block = _normalize_match_text(block_text)
+    norm_text = _normalize_match_text(text)
+    if len(norm_block) >= 20 and norm_block not in norm_text and norm_text not in norm_block:
+        if score < 0.35:
+            return None
+    return str(block_id)
+
+
 def _match_block_by_text(text: str, blocks: list[dict]) -> str | None:
     """Return block_id whose text best matches the given excerpt."""
-    excerpt = _normalize_match_text(text[:300])
-    if len(excerpt) < 8:
+    excerpt = (text or "").strip()
+    if len(_normalize_match_text(excerpt)) < 8:
         return None
-    excerpt_core = excerpt.rstrip(".,;:!?")
+
+    best_id: str | None = None
+    best_score = 0.0
+    norm_excerpt = _normalize_match_text(excerpt)
+
     for b in blocks:
-        block_text = _normalize_match_text(b.get("text") or "")
-        if not block_text:
+        block_text = str(b.get("text") or "").strip()
+        if _is_trivial_block_text(block_text):
             continue
-        block_core = block_text.rstrip(".,;:!?")
-        if (
-            block_text in excerpt
-            or excerpt in block_text
-            or (excerpt_core and excerpt_core in block_text)
-            or (block_core and block_core in excerpt)
-        ):
-            bid = b.get("block_id")
-            if bid:
-                return str(bid)
+
+        score = _text_overlap_score(excerpt, block_text)
+        norm_block = _normalize_match_text(block_text)
+        if len(norm_block) >= 20 and (norm_block in norm_excerpt or norm_excerpt in norm_block):
+            score = max(score, 0.85)
+
+        bid = b.get("block_id")
+        if bid and score > best_score:
+            best_score = score
+            best_id = str(bid)
+
+    if best_score >= 0.35 and best_id:
+        return best_id
     return None
+
+
+def _sanitize_clause_and_issue_block_ids(
+    clauses: list[dict], issues: list[dict], blocks: list[dict]
+) -> None:
+    """Drop block_id bindings that point at unrelated or non-anchorable blocks."""
+    for clause in clauses:
+        text = " ".join(
+            part
+            for part in (
+                clause.get("text"),
+                clause.get("implications"),
+                (clause.get("editor_fix") or {}).get("problem_summary")
+                if isinstance(clause.get("editor_fix"), dict)
+                else None,
+            )
+            if part
+        )
+        validated = _validate_block_binding(text, clause.get("block_id"), blocks)
+        clause["block_id"] = validated
+        editor_fix = clause.get("editor_fix")
+        if isinstance(editor_fix, dict) and editor_fix.get("block_id"):
+            editor_fix["block_id"] = _validate_block_binding(
+                text, editor_fix.get("block_id"), blocks
+            )
+
+    for issue in issues:
+        text = str(issue.get("description") or "")
+        issue["block_id"] = _validate_block_binding(text, issue.get("block_id"), blocks)
 
 
 def _map_clauses_to_blocks(clauses: list[dict], blocks: list[dict]) -> None:
@@ -491,6 +609,11 @@ Relevant Ethiopian law (use for citations):
 ---
 
 When tying clauses or issues to the document, set block_id to one of the block_id values listed in Document blocks above. If no block matches, use null — never guess or invent a block_id.
+
+CRITICAL block_id rules:
+- block_id must reference the block whose TEXT is being analyzed — never a nearby label (e.g. "AND", "OR", "SERVICE PROVIDER:", "TO EMPLOYER:").
+- Blocks marked NON-ANCHORABLE must never receive a block_id on any clause or issue.
+- For document-level gaps (missing entire sections such as dispute resolution, limitation of liability, termination notice): set block_id to null and describe the gap in implications/issues. Do NOT attach these to unrelated blocks.
 
 IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
@@ -823,6 +946,7 @@ class ComplianceAnalysisAgent:
         issues = data.get("issues", []) or []
         _map_clauses_to_blocks(clauses, blocks)
         _map_issues_to_blocks(issues, blocks)
+        _sanitize_clause_and_issue_block_ids(clauses, issues, blocks)
         data["clauses"] = clauses
         data["issues"] = issues
 
