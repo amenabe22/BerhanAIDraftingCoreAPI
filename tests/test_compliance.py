@@ -697,6 +697,84 @@ def test_sanitize_clears_missing_provision_on_service_provider_label():
     assert clauses[0]["block_id"] is None
 
 
+def test_filter_false_missing_governing_law_when_section_exists():
+    from app.services.drafting.compliance.analysis_agent import (
+        _filter_false_missing_provision_findings,
+    )
+
+    full_text = """
+    10. GOVERNING LAW AND JURISDICTION
+    10.1. Governing Law. This Agreement shall be governed by and construed in accordance
+    with the laws of Ethiopia, including the Ethiopian Commercial Code (Proclamation No. 1243/2021).
+    10.2. Jurisdiction. Any disputes arising from this Agreement shall be subject to the
+    exclusive jurisdiction of Ethiopian courts.
+    """
+    blocks = [
+        {
+            "block_id": "h10",
+            "type": "heading",
+            "text": "10. GOVERNING LAW AND JURISDICTION",
+        },
+        {
+            "block_id": "p101",
+            "type": "paragraph",
+            "text": (
+                "10.1. Governing Law. This Agreement shall be governed by and construed "
+                "in accordance with the laws of Ethiopia, including the Ethiopian Commercial Code."
+            ),
+        },
+        {
+            "block_id": "p102",
+            "type": "paragraph",
+            "text": (
+                "10.2. Jurisdiction. Any disputes arising from this Agreement shall be subject "
+                "to the exclusive jurisdiction of Ethiopian courts."
+            ),
+        },
+    ]
+    clauses = [
+        {
+            "clause_id": "c1",
+            "text": "10. GOVERNING LAW AND JURISDICTION",
+            "implications": (
+                "The document lacks an explicit 'Governing Law' clause. While the parties are "
+                "Ethiopian entities, an explicit clause is standard practice and crucial for clarity."
+            ),
+            "block_id": "h10",
+            "risk_level": "HIGH",
+            "editor_fix": {"problem_summary": "Missing governing law"},
+        }
+    ]
+    issues = [
+        {
+            "issue_id": "i1",
+            "description": clauses[0]["implications"],
+            "severity": "HIGH",
+            "block_id": "h10",
+        }
+    ]
+    _filter_false_missing_provision_findings(clauses, issues, blocks, full_text)
+    assert clauses[0]["risk_level"] == "LOW"
+    assert clauses[0]["editor_fix"] is None
+    assert issues == []
+
+
+def test_reanchor_heading_to_body_paragraph():
+    from app.services.drafting.compliance.analysis_agent import (
+        _reanchor_heading_to_body,
+    )
+
+    blocks = [
+        {"block_id": "h10", "type": "heading", "text": "10. GOVERNING LAW AND JURISDICTION"},
+        {
+            "block_id": "p101",
+            "type": "paragraph",
+            "text": "10.1. Governing Law. This Agreement shall be governed by the laws of Ethiopia.",
+        },
+    ]
+    assert _reanchor_heading_to_body("h10", blocks) == "p101"
+
+
 def test_build_analysis_prompt_includes_block_ids():
     from app.services.drafting.compliance.analysis_agent import _build_analysis_prompt
 

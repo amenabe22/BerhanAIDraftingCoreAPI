@@ -291,6 +291,161 @@ def _looks_like_missing_provision(text: str) -> bool:
     return any(m in t for m in markers)
 
 
+_PROVISION_MARKERS: dict[str, tuple[str, ...]] = {
+    "governing_law": (
+        "governed by",
+        "governing law",
+        "construed in accordance with",
+        "laws of ethiopia",
+        "law of ethiopia",
+    ),
+    "jurisdiction": (
+        "jurisdiction",
+        "exclusive jurisdiction",
+        "ethiopian courts",
+        "courts of ethiopia",
+        "submit to the",
+    ),
+    "dispute_resolution": (
+        "dispute resolution",
+        "arbitration",
+        "mediation",
+    ),
+    "limitation_of_liability": (
+        "limitation of liability",
+        "limit liability",
+        "liability shall not exceed",
+        "cap on liability",
+    ),
+    "termination": (
+        "termination of employment",
+        "terminate this agreement",
+        "notice of termination",
+        "termination by",
+    ),
+}
+
+_MISSING_CLAIM_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "governing_law": ("governing law", "governing-law"),
+    "jurisdiction": ("jurisdiction", "venue", "forum selection"),
+    "dispute_resolution": ("dispute resolution", "arbitration clause", "mediation clause"),
+    "limitation_of_liability": (
+        "limitation of liability",
+        "liability cap",
+        "cap on liability",
+    ),
+    "termination": ("termination clause", "termination notice", "notice period"),
+}
+
+
+def _document_corpus(full_text: str, blocks: list[dict]) -> str:
+    if full_text and full_text.strip():
+        return _normalize_match_text(full_text)
+    return _normalize_match_text("\n".join(str(b.get("text") or "") for b in blocks))
+
+
+def _corpus_has_provision(corpus: str, provision_key: str) -> bool:
+    patterns = _PROVISION_MARKERS.get(provision_key, ())
+    return any(p in corpus for p in patterns)
+
+
+def _text_claims_missing_provision(text: str, provision_key: str) -> bool:
+    if not _looks_like_missing_provision(text):
+        return False
+    t = _normalize_match_text(text)
+    return any(k in t for k in _MISSING_CLAIM_KEYWORDS.get(provision_key, ()))
+
+
+def _is_false_missing_provision_finding(text: str, corpus: str) -> bool:
+    """True when analysis claims a provision is missing but document text contains it."""
+    for provision_key in _PROVISION_MARKERS:
+        if _text_claims_missing_provision(text, provision_key) and _corpus_has_provision(
+            corpus, provision_key
+        ):
+            return True
+    return False
+
+
+def _block_index(blocks: list[dict], block_id: str | None) -> int | None:
+    if not block_id:
+        return None
+    for i, block in enumerate(blocks):
+        if str(block.get("block_id")) == str(block_id):
+            return i
+    return None
+
+
+def _reanchor_heading_to_body(block_id: str | None, blocks: list[dict]) -> str | None:
+    """Prefer the first substantive paragraph under a section heading for highlights."""
+    if not block_id:
+        return None
+    idx = _block_index(blocks, block_id)
+    if idx is None:
+        return block_id
+    block = blocks[idx]
+    if block.get("type") != "heading":
+        return block_id
+    for j in range(idx + 1, len(blocks)):
+        follower = blocks[j]
+        if follower.get("type") == "heading":
+            break
+        follower_text = str(follower.get("text") or "").strip()
+        if follower.get("type") == "paragraph" and len(follower_text) >= 30:
+            return str(follower.get("block_id"))
+    return block_id
+
+
+def _downgrade_false_positive_clause(clause: dict) -> None:
+    clause["risk_level"] = "LOW"
+    clause["editor_fix"] = None
+    clause["block_id"] = None
+    clause["recommendations"] = []
+    clause["ethiopian_law_implications"] = []
+
+
+def _filter_false_missing_provision_findings(
+    clauses: list[dict],
+    issues: list[dict],
+    blocks: list[dict],
+    full_text: str,
+) -> None:
+    """Remove/downgrade LLM 'missing X' findings when the document already contains X."""
+    corpus = _document_corpus(full_text, blocks)
+
+    for clause in clauses:
+        combined = " ".join(
+            part
+            for part in (
+                clause.get("text"),
+                clause.get("implications"),
+                (clause.get("editor_fix") or {}).get("problem_summary")
+                if isinstance(clause.get("editor_fix"), dict)
+                else None,
+            )
+            if part
+        )
+        if _is_false_missing_provision_finding(combined, corpus):
+            _downgrade_false_positive_clause(clause)
+
+    kept_issues: list[dict] = []
+    for issue in issues:
+        description = str(issue.get("description") or "")
+        if _is_false_missing_provision_finding(description, corpus):
+            continue
+        kept_issues.append(issue)
+    issues[:] = kept_issues
+
+
+def _filter_missing_clauses_list(missing_clauses: list, corpus: str) -> list:
+    kept: list = []
+    for entry in missing_clauses or []:
+        text = str(entry)
+        if _is_false_missing_provision_finding(text, corpus):
+            continue
+        kept.append(entry)
+    return kept
+
+
 def _validate_block_binding(text: str, block_id: str | None, blocks: list[dict]) -> str | None:
     """Return block_id only when the block text actually supports the clause/issue."""
     if not block_id:
@@ -361,16 +516,19 @@ def _sanitize_clause_and_issue_block_ids(
             if part
         )
         validated = _validate_block_binding(text, clause.get("block_id"), blocks)
+        validated = _reanchor_heading_to_body(validated, blocks)
         clause["block_id"] = validated
         editor_fix = clause.get("editor_fix")
         if isinstance(editor_fix, dict) and editor_fix.get("block_id"):
-            editor_fix["block_id"] = _validate_block_binding(
+            fix_block = _validate_block_binding(
                 text, editor_fix.get("block_id"), blocks
             )
+            editor_fix["block_id"] = _reanchor_heading_to_body(fix_block, blocks)
 
     for issue in issues:
         text = str(issue.get("description") or "")
-        issue["block_id"] = _validate_block_binding(text, issue.get("block_id"), blocks)
+        validated = _validate_block_binding(text, issue.get("block_id"), blocks)
+        issue["block_id"] = _reanchor_heading_to_body(validated, blocks)
 
 
 def _map_clauses_to_blocks(clauses: list[dict], blocks: list[dict]) -> None:
@@ -614,6 +772,8 @@ CRITICAL block_id rules:
 - block_id must reference the block whose TEXT is being analyzed — never a nearby label (e.g. "AND", "OR", "SERVICE PROVIDER:", "TO EMPLOYER:").
 - Blocks marked NON-ANCHORABLE must never receive a block_id on any clause or issue.
 - For document-level gaps (missing entire sections such as dispute resolution, limitation of liability, termination notice): set block_id to null and describe the gap in implications/issues. Do NOT attach these to unrelated blocks.
+- Before flagging a provision as MISSING, search the full document text including numbered sub-clauses (e.g. 10.1, 10.2) under section headings. If body text already states the provision (e.g. "governed by the laws of Ethiopia"), it is NOT missing — use LOW risk or omit the finding.
+- Prefer block_id of the substantive paragraph block (e.g. the 10.1 body text) over the section heading alone when analyzing a section.
 
 IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
@@ -947,6 +1107,11 @@ class ComplianceAnalysisAgent:
         _map_clauses_to_blocks(clauses, blocks)
         _map_issues_to_blocks(issues, blocks)
         _sanitize_clause_and_issue_block_ids(clauses, issues, blocks)
+        _filter_false_missing_provision_findings(clauses, issues, blocks, full_text)
+        corpus = _document_corpus(full_text, blocks)
+        data["missing_clauses"] = _filter_missing_clauses_list(
+            data.get("missing_clauses") or [], corpus
+        )
         data["clauses"] = clauses
         data["issues"] = issues
 
