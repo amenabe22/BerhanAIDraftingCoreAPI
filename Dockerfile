@@ -9,17 +9,8 @@ RUN pip install --no-cache-dir uv
 # Copy only dependency manifests first (maximise layer cache)
 COPY pyproject.toml requirements.txt ./
 
-# Install runtime dependencies into an isolated prefix
-RUN uv pip install --system --no-cache \
-    fastapi \
-    "uvicorn[standard]" \
-    langgraph \
-    langchain-core \
-    langchain-cohere \
-    langchain-openai \
-    langchain-qdrant \
-    qdrant-client \
-    pydantic-settings
+# Install runtime dependencies from requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 
 # ── Stage 2: production image ─────────────────────────────────────────────────
