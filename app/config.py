@@ -40,10 +40,13 @@ class Settings(BaseSettings):
     COMPLIANCE_RERANKER_MODEL: str | None = None  # default: same as analysis model
     COMPLIANCE_IMPLICATION_INITIAL_LIMIT: int = 15
     COMPLIANCE_MAX_CLAUSES_FOR_CITATIONS: int = 20
-    COMPLIANCE_ANALYSIS_TEMPERATURE: float = 0.1
+    COMPLIANCE_ANALYSIS_TEMPERATURE: float = 0.0
+    COMPLIANCE_ANALYSIS_SEED: int = 7
     COMPLIANCE_ANALYSIS_MAX_TOKENS: int = (
         32768  # editor_fix per clause increases output size; avoid truncation
     )
+    # Reasoning effort for main rubric evaluation only (low|medium|high; empty = off)
+    COMPLIANCE_REASONING_EFFORT: str = ""
     COMPLIANCE_SCORE_ROUNDING: int = 2
     # Normalization ceiling for the deterministic scoring engine.
     # raw_penalty is expressed as a fraction of this value to produce risk_score 0–100.
@@ -59,6 +62,10 @@ class Settings(BaseSettings):
     EDIT_SELECTOR_TOP_K: int = 10
     EDIT_MIN_CONFIDENCE: float = 0.55
     EDIT_MAX_REVISIONS: int = 2
+
+    # Redis (compliance result cache + diff anchoring)
+    REDIS_URL: str = "redis://localhost:6379/0"
+    COMPLIANCE_CACHE_TTL: int = 604_800  # 7 days
 
     @field_validator("QDRANT_API_KEY", "COHERE_API_KEY", mode="before")
     @classmethod

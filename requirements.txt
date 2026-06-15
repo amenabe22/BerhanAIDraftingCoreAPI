@@ -9,6 +9,7 @@ qdrant-client
 pydantic-settings
 jsonschema
 cohere
+redis
 
 # Dev / testing
 pytest

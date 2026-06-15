@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "jsonschema>=4.0",
     "cohere>=5.0",
+    "redis>=5.0",
 ]
 
 [project.optional-dependencies]

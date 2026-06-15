@@ -21,9 +21,25 @@ from app.models.drafting.compliance import (
     LegalIssue,
 )
 from app.services.drafting.compliance.level_config import get_compliance_limits
+from app.services.drafting.compliance.compliance_cache import (
+    get_last_rubric_result,
+    store_last_rubric_result,
+)
+from app.services.drafting.compliance.content_hash import (
+    compute_document_content_hash,
+    compute_per_block_hashes,
+)
+from app.services.drafting.compliance.rubric import (
+    RUBRIC_ETHIOPIAN_FRAMEWORK,
+    RUBRIC_VERSION,
+    VALID_STATUSES,
+    format_rubric_for_prompt,
+    get_rubric_items_for_document_type,
+)
 from app.services.drafting.compliance.scoring import (
     DEFAULT_MAX_PENALTY,
     compute_risk_score,
+    compute_rubric_score,
 )
 from app.services.drafting.knowledge_retrieval import (
     build_clause_legal_query,
@@ -726,6 +742,113 @@ def _citations_to_str_list(cits: list) -> list[str]:
     return out
 
 
+def _build_analysis_llm() -> ChatOpenAI:
+    """Main rubric-evaluation LLM (optional reasoning model, deterministic seed)."""
+    model = settings.COMPLIANCE_ANALYSIS_MODEL or settings.GEMINI_MODEL
+    extra_body: dict = {}
+    effort = (getattr(settings, "COMPLIANCE_REASONING_EFFORT", "") or "").strip().lower()
+    if effort and effort not in ("none", "off", ""):
+        extra_body["reasoning"] = {"effort": effort}
+    kwargs: dict = {
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_key": settings.OPENROUTER_API_KEY,
+        "model": model,
+        "temperature": getattr(settings, "COMPLIANCE_ANALYSIS_TEMPERATURE", 0.0),
+        "max_tokens": getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 32768),
+        "streaming": True,
+        "model_kwargs": {
+            "response_format": {"type": "json_object"},
+            "seed": getattr(settings, "COMPLIANCE_ANALYSIS_SEED", 7),
+        },
+    }
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+    return ChatOpenAI(**kwargs)
+
+
+def _normalize_rubric_check(raw: dict, *, default_id: str = "") -> dict:
+    status = (raw.get("status") or "MISSING").upper().strip()
+    if status not in VALID_STATUSES:
+        status = "MISSING"
+    block_id = raw.get("block_id")
+    if block_id is not None:
+        block_id = str(block_id).strip() or None
+    return {
+        "id": str(raw.get("id") or default_id).strip(),
+        "status": status,
+        "block_id": block_id,
+        "rationale": str(raw.get("rationale") or "").strip(),
+    }
+
+
+def _ensure_rubric_checks_complete(
+    checks: list[dict],
+    rubric_items: list[dict],
+) -> list[dict]:
+    """Ensure every rubric item has exactly one check entry."""
+    by_id = {c["id"]: c for c in checks if c.get("id")}
+    out: list[dict] = []
+    for item in rubric_items:
+        item_id = item["id"]
+        if item_id in by_id:
+            out.append(by_id[item_id])
+        else:
+            out.append(
+                {
+                    "id": item_id,
+                    "status": "MISSING",
+                    "block_id": None,
+                    "rationale": "Not evaluated.",
+                }
+            )
+    return out
+
+
+def _apply_carryover_guard(
+    new_checks: list[dict],
+    prior_checks: list[dict] | None,
+    prior_block_hashes: dict[str, str],
+    current_block_hashes: dict[str, str],
+) -> list[dict]:
+    """Reuse prior rubric status when the bound block content hash is unchanged."""
+    if not prior_checks:
+        return new_checks
+    prior_by_id = {c["id"]: c for c in prior_checks if c.get("id")}
+    out: list[dict] = []
+    for check in new_checks:
+        item_id = check.get("id")
+        prior = prior_by_id.get(item_id)
+        if not prior:
+            out.append(check)
+            continue
+        block_id = check.get("block_id") or prior.get("block_id")
+        if block_id:
+            old_hash = prior_block_hashes.get(str(block_id))
+            new_hash = current_block_hashes.get(str(block_id))
+            if old_hash and new_hash and old_hash == new_hash:
+                carried = dict(check)
+                carried["status"] = prior.get("status", check.get("status"))
+                carried["block_id"] = block_id
+                carried["rationale"] = prior.get("rationale") or check.get("rationale", "")
+                carried["carried_over"] = True
+                out.append(carried)
+                continue
+        out.append(check)
+    return out
+
+
+def _format_prior_checks_for_prompt(prior_checks: list[dict]) -> str:
+    if not prior_checks:
+        return ""
+    lines = []
+    for c in prior_checks:
+        lines.append(
+            f'- id="{c.get("id")}" status={c.get("status")} block_id={c.get("block_id")!r} '
+            f'rationale="{str(c.get("rationale") or "")[:120]}"'
+        )
+    return "\n".join(lines)
+
+
 def _build_analysis_prompt(
     full_text: str,
     blocks: list[dict],
@@ -733,12 +856,25 @@ def _build_analysis_prompt(
     document_type: str,
     language: str,
     *,
+    rubric_items: list[dict] | None = None,
+    prior_checks: list[dict] | None = None,
     doc_char_limit: int = 12_000,
     blocks_limit: int = 50,
     block_char_limit: int = 200,
     legal_context_limit: int = 15_000,
 ) -> str:
-    """Build the main analysis prompt with checklist and output schema."""
+    """Build the main analysis prompt with rubric checklist and output schema."""
+    items = rubric_items or get_rubric_items_for_document_type(document_type)
+    rubric_block = format_rubric_for_prompt(items)
+    prior_block = _format_prior_checks_for_prompt(prior_checks or [])
+    prior_section = ""
+    if prior_block:
+        prior_section = f"""
+Previous rubric evaluation (baseline — keep each item's status UNLESS the text bound to that item materially changed):
+---
+{prior_block}
+---
+"""
     blocks_context = _format_blocks_for_prompt(
         blocks,
         blocks_limit=blocks_limit,
@@ -749,9 +885,21 @@ def _build_analysis_prompt(
 Document type: {document_type}
 Language for response: {language}
 
-Checklist of areas to consider: {COMPLIANCE_CHECKLIST}
+RUBRIC EVALUATION (required — authoritative for scoring):
+For EACH rubric id below, return exactly one entry in "rubric_checks" with:
+- id: the rubric id (must match exactly)
+- status: one of PRESENT | PARTIAL | MISSING | NON_COMPLIANT | NOT_APPLICABLE
+- block_id: block_id from Document blocks that best supports your judgment, or null for document-level items
+- rationale: one short sentence explaining the status
 
-Document blocks (use ONLY these block_id values when tying clauses or issues to the document; do not invent block_ids):
+Rubric items (version {RUBRIC_VERSION}):
+---
+{rubric_block}
+---
+
+{RUBRIC_ETHIOPIAN_FRAMEWORK}
+{prior_section}
+Document blocks (use ONLY these block_id values when tying clauses, issues, or rubric_checks to the document; do not invent block_ids):
 ---
 {blocks_context}
 ---
@@ -766,23 +914,25 @@ Relevant Ethiopian law (use for citations):
 {legal_context[:legal_context_limit]}
 ---
 
-When tying clauses or issues to the document, set block_id to one of the block_id values listed in Document blocks above. If no block matches, use null — never guess or invent a block_id.
+When tying clauses, issues, or rubric_checks to the document, set block_id to one of the block_id values listed in Document blocks above. If no block matches, use null — never guess or invent a block_id.
 
 CRITICAL block_id rules:
 - block_id must reference the block whose TEXT is being analyzed — never a nearby label (e.g. "AND", "OR", "SERVICE PROVIDER:", "TO EMPLOYER:").
-- Blocks marked NON-ANCHORABLE must never receive a block_id on any clause or issue.
-- For document-level gaps (missing entire sections such as dispute resolution, limitation of liability, termination notice): set block_id to null and describe the gap in implications/issues. Do NOT attach these to unrelated blocks.
-- Before flagging a provision as MISSING, search the full document text including numbered sub-clauses (e.g. 10.1, 10.2) under section headings. If body text already states the provision (e.g. "governed by the laws of Ethiopia"), it is NOT missing — use LOW risk or omit the finding.
+- Blocks marked NON-ANCHORABLE must never receive a block_id on any clause, issue, or rubric check.
+- For document-level gaps (missing entire sections such as dispute resolution, limitation of liability, termination notice): set block_id to null and describe the gap in implications/issues/rationale. Do NOT attach these to unrelated blocks.
+- Before flagging a provision as MISSING, search the full document text including numbered sub-clauses (e.g. 10.1, 10.2) under section headings. If body text already states the provision (e.g. "governed by the laws of Ethiopia"), mark PRESENT or PARTIAL — not MISSING.
 - Prefer block_id of the substantive paragraph block (e.g. the 10.1 body text) over the section heading alone when analyzing a section.
+- If a prior baseline is provided above, preserve each item's status unless the bound block text materially changed.
 
 IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
 For clauses with risk_level MEDIUM, HIGH, or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW clauses only, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. Keep every editor_fix field concise (short phrases, not paragraphs). editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Set editor_fix.severity to medium_risk for MEDIUM, high_risk for HIGH, or critical_risk for CRITICAL. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."
 
-Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text):
+Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text; rubric_checks MUST include every rubric id listed above):
 {{
   "document_type": "string (detected or given)",
   "summary": "string (executive summary)",
+  "rubric_checks": [{{ "id": "string (rubric id)", "status": "PRESENT|PARTIAL|MISSING|NON_COMPLIANT|NOT_APPLICABLE", "block_id": "string or null", "rationale": "string" }}],
   "clauses": [{{ "clause_id": "string", "text": "string", "risk_level": "LOW|MEDIUM|HIGH|CRITICAL", "implications": "string", "block_id": "string or null", "citations": [], "ethiopian_law_implications": ["string"], "recommendations": ["string"], "editor_fix": null or {{ "action": "replace", "block_id": "string or null", "clause_reference": "string", "current_text": "string", "problem_summary": "string", "offending_phrases": ["string"], "legal_requirement": "string", "rewrite_directive": "string", "remove_phrases": ["string"], "add_elements": ["string"], "suggested_text": "string", "placeholder_policy": "use_bracketed_placeholders_when_values_unknown", "legal_basis": [{{ "source": "string", "article": "string", "rationale": "string" }}], "document_language": "string", "severity": "medium_risk | high_risk | critical_risk", "confidence": 0.0 to 1.0 }} }}],
   "issues": [{{ "issue_id": "string", "description": "string", "severity": "LOW|MEDIUM|HIGH|CRITICAL", "block_id": "string or null", "citations": [] }}],
   "ethiopian_law_compliance": {{ "summary": "string", "applicable_laws": ["string"], "concerns": ["string"] }},
@@ -965,12 +1115,16 @@ class ComplianceAnalysisAgent:
         language: str = "en",
         document_type: str | None = None,
         check_level: str = "quick",
+        doc_id: str | None = None,
+        prior_rubric_result: dict | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         token_callback: Callable[[str], None] | None = None,
     ) -> ComplianceAnalysisResponse:
         """Run full pipeline and return ComplianceAnalysisResponse. If document_blocks (e.g. from Qdrant) is provided, use it for full_text and block context (block_id, type). check_level (quick/standard/deep) controls context and citation depth.
 
         If progress_callback is set, it is invoked with ``{"phase": str, "percent": int, "message": str}`` at coarse pipeline boundaries (and during per-clause citation when applicable). Percent is approximate (0–100).
+
+        When doc_id is provided, diff-aware anchoring reuses prior rubric statuses for unchanged blocks.
         """
         if document_blocks:
             blocks = document_blocks
@@ -988,6 +1142,21 @@ class ComplianceAnalysisAgent:
         )
         limits = get_compliance_limits(check_level)
         doc_type = document_type or _detect_document_type(full_text)
+        rubric_items = get_rubric_items_for_document_type(doc_type)
+        content_hash = compute_document_content_hash(blocks)
+        per_block_hashes = compute_per_block_hashes(blocks)
+
+        prior_result = prior_rubric_result
+        if prior_result is None and doc_id:
+            prior_result = get_last_rubric_result(doc_id)
+        prior_checks: list[dict] = []
+        prior_block_hashes: dict[str, str] = {}
+        if prior_result and prior_result.get("rubric_version") == RUBRIC_VERSION:
+            prior_checks = [
+                _normalize_rubric_check(c) for c in (prior_result.get("checks") or [])
+            ]
+            prior_block_hashes = prior_result.get("per_block_hashes") or {}
+
         summary_for_queries = full_text[:500]
 
         # 1) Targeted query generation
@@ -1029,22 +1198,15 @@ class ComplianceAnalysisAgent:
         )
 
         # 4) Main LLM analysis (level-specific prompt truncation)
-        model = settings.COMPLIANCE_ANALYSIS_MODEL or settings.GEMINI_MODEL
-        llm = ChatOpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=settings.OPENROUTER_API_KEY,
-            model=model,
-            temperature=getattr(settings, "COMPLIANCE_ANALYSIS_TEMPERATURE", 0.1),
-            max_tokens=getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 32768),
-            streaming=True,
-            model_kwargs={"response_format": {"type": "json_object"}},
-        )
+        llm = _build_analysis_llm()
         prompt = _build_analysis_prompt(
             full_text,
             blocks,
             legal_context,
             doc_type,
             language,
+            rubric_items=rubric_items,
+            prior_checks=prior_checks if prior_checks else None,
             doc_char_limit=limits["doc_char_limit"],
             blocks_limit=limits["blocks_limit"],
             block_char_limit=limits["block_char_limit"],
@@ -1115,6 +1277,19 @@ class ComplianceAnalysisAgent:
         data["clauses"] = clauses
         data["issues"] = issues
 
+        # Rubric checks: normalize, diff-anchor carry-over, ensure completeness
+        raw_rubric = [
+            _normalize_rubric_check(c) for c in (data.get("rubric_checks") or [])
+        ]
+        rubric_checks = _ensure_rubric_checks_complete(raw_rubric, rubric_items)
+        rubric_checks = _apply_carryover_guard(
+            rubric_checks,
+            prior_checks,
+            prior_block_hashes,
+            per_block_hashes,
+        )
+        data["rubric_checks"] = rubric_checks
+
         # 5) Per-clause citations for non-LOW risk clauses with implications (level-specific)
         max_clauses_citations = limits["max_clauses_citations"]
         clauses_with_citations = 0
@@ -1180,12 +1355,16 @@ class ComplianceAnalysisAgent:
             if (i.get("severity") or "").upper() in ("HIGH", "CRITICAL"):
                 critical_issues.append(i)
 
-        # Deterministic scoring: derive risk_score, compliance_score, and overall_risk_level
-        # from the LLM's clause/issue severity classifications. No LLM math involved.
+        # Deterministic scoring: authoritative score from rubric statuses
         max_penalty = getattr(settings, "COMPLIANCE_SCORE_MAX_PENALTY", DEFAULT_MAX_PENALTY)
         eth_data_raw = data.get("ethiopian_law_compliance") or {}
         eth_concerns_raw = eth_data_raw.get("concerns") or []
-        score_breakdown = compute_risk_score(
+        rubric_breakdown = compute_rubric_score(
+            rubric_checks,
+            version=RUBRIC_VERSION,
+            max_penalty=max_penalty,
+        )
+        legacy_breakdown = compute_risk_score(
             clauses=data.get("clauses", []) or [],
             issues=data.get("issues", []) or [],
             missing_clauses=data.get("missing_clauses", []) or [],
@@ -1193,9 +1372,22 @@ class ComplianceAnalysisAgent:
             concern_count=len(eth_concerns_raw),
             max_penalty=max_penalty,
         )
-        risk_score: float = score_breakdown["risk_score"]
-        compliance_score: float = score_breakdown["compliance_score"]
-        overall_risk_level: str = score_breakdown["overall_risk_level"]
+        score_breakdown = {
+            **legacy_breakdown,
+            "rubric": rubric_breakdown,
+            "content_hash": content_hash,
+        }
+        risk_score: float = rubric_breakdown["risk_score"]
+        compliance_score: float = rubric_breakdown["compliance_score"]
+        overall_risk_level: str = rubric_breakdown["overall_risk_level"]
+
+        if doc_id:
+            store_last_rubric_result(
+                doc_id,
+                content_hash=content_hash,
+                per_block_hashes=per_block_hashes,
+                checks=rubric_checks,
+            )
 
         eth = eth_data_raw
         eth_compliance = EthiopianLawCompliance(

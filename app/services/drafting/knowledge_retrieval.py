@@ -26,14 +26,21 @@ _RE_ARTICLE_NUMBER = re.compile(r"^(?:Article\s*)?(\d+)$", re.I)
 _available_sources_cache: list[str] | None = None
 
 
-def _compliance_llm(model: str | None = None, temperature: float = 0.0) -> ChatOpenAI:
-    """LLM for compliance (query gen, rerank). Non-streaming, low temperature."""
+def _compliance_llm(model: str | None = None, temperature: float | None = None) -> ChatOpenAI:
+    """LLM for compliance query gen and rerank (fast model, deterministic)."""
+    temp = (
+        settings.COMPLIANCE_ANALYSIS_TEMPERATURE
+        if temperature is None
+        else temperature
+    )
+    # Query gen / rerank stay on the fast default model, not the reasoning analysis model.
     return ChatOpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=settings.OPENROUTER_API_KEY,
-        model=model or settings.COMPLIANCE_ANALYSIS_MODEL or settings.GEMINI_MODEL,
-        temperature=temperature,
+        model=model or settings.GEMINI_MODEL,
+        temperature=temp,
         streaming=False,
+        model_kwargs={"seed": settings.COMPLIANCE_ANALYSIS_SEED},
     )
 
 

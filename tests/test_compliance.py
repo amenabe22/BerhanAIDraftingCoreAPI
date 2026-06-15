@@ -14,6 +14,16 @@ from app.models.drafting.compliance import (
     LegalCitation,
 )
 
+
+def _default_rubric_checks(document_type: str = "Contract") -> list[dict]:
+    from app.services.drafting.compliance.rubric import get_rubric_items_for_document_type
+
+    return [
+        {"id": item["id"], "status": "PRESENT", "block_id": None, "rationale": "OK"}
+        for item in get_rubric_items_for_document_type(document_type)
+    ]
+
+
 # ---------------------------------------------------------------------------
 # ComplianceAnalysisRequest validation
 # ---------------------------------------------------------------------------
@@ -53,6 +63,16 @@ def test_request_check_level_default_and_accepted():
 # ---------------------------------------------------------------------------
 # Level config
 # ---------------------------------------------------------------------------
+
+
+def test_compliance_llm_uses_seed():
+    from app.services.drafting.knowledge_retrieval import _compliance_llm
+
+    with patch("app.services.drafting.knowledge_retrieval.ChatOpenAI") as mock_cls:
+        _compliance_llm()
+        kwargs = mock_cls.call_args[1]
+        assert kwargs["model_kwargs"]["seed"] == 7
+        assert kwargs["temperature"] == 0.0
 
 
 def test_get_compliance_limits_quick():
@@ -249,6 +269,11 @@ def test_compliance_analyze_endpoint_returns_schema_with_mocked_agent():
         patch(
             "app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id"
         ) as mock_get_blocks,
+        patch(
+            "app.api.v1.endpoints.drafting.compliance.get_cached_compliance",
+            return_value=None,
+        ),
+        patch("app.api.v1.endpoints.drafting.compliance.store_cached_compliance"),
         patch("app.api.v1.endpoints.drafting.compliance.ComplianceAnalysisAgent") as MockAgent,
     ):
         mock_get_blocks.return_value = sample_blocks
@@ -303,6 +328,11 @@ def test_compliance_analyze_endpoint_passes_check_level():
     sample_blocks = [{"block_id": "b1", "text": "Sample.", "type": "paragraph", "doc_id": "doc-1"}]
     with (
         patch("app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id") as mock_get,
+        patch(
+            "app.api.v1.endpoints.drafting.compliance.get_cached_compliance",
+            return_value=None,
+        ),
+        patch("app.api.v1.endpoints.drafting.compliance.store_cached_compliance"),
         patch("app.api.v1.endpoints.drafting.compliance.ComplianceAnalysisAgent") as MockAgent,
     ):
         mock_get.return_value = sample_blocks
@@ -365,6 +395,11 @@ async def test_compliance_analyze_stream_emits_progress_and_result():
 
     with (
         patch("app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id") as mock_get,
+        patch(
+            "app.api.v1.endpoints.drafting.compliance.get_cached_compliance",
+            return_value=None,
+        ),
+        patch("app.api.v1.endpoints.drafting.compliance.store_cached_compliance"),
         patch("app.api.v1.endpoints.drafting.compliance.ComplianceAnalysisAgent") as MockAgent,
     ):
         mock_get.return_value = sample_blocks
@@ -417,6 +452,11 @@ async def test_compliance_analyze_stream_emits_token_chunks():
 
     with (
         patch("app.api.v1.endpoints.drafting.compliance.get_document_blocks_by_doc_id") as mock_get,
+        patch(
+            "app.api.v1.endpoints.drafting.compliance.get_cached_compliance",
+            return_value=None,
+        ),
+        patch("app.api.v1.endpoints.drafting.compliance.store_cached_compliance"),
         patch("app.api.v1.endpoints.drafting.compliance.ComplianceAnalysisAgent") as MockAgent,
     ):
         mock_get.return_value = sample_blocks
@@ -790,8 +830,10 @@ def test_build_analysis_prompt_includes_block_ids():
         language="en",
     )
     assert "[block_id: abc-123 | type: paragraph]" in prompt
-    assert "[block_id: def-456 | type: heading]" in prompt
+    assert "def-456 | type: heading" in prompt
     assert "do not invent block_ids" in prompt
+    assert "rubric_checks" in prompt
+    assert "PRESENT|PARTIAL|MISSING" in prompt
 
 
 def test_clauses_fallback_from_blocks():
@@ -1010,22 +1052,47 @@ def test_analyze_document_maps_issues_for_advisor_schema():
     from app.models.drafting.compliance import IssueSeverity
     from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
 
-    llm_json = """
-    {
-      "document_type": "Contract",
-      "summary": "Test.",
-      "clauses": [{"clause_id": "c1", "text": "Clause.", "risk_level": "LOW", "implications": "", "block_id": "b1", "citations": [], "ethiopian_law_implications": [], "recommendations": [], "editor_fix": null}],
-      "issues": [
-        {"issue_id": "issue_1", "description": "Vague liability cap", "severity": "MEDIUM", "block_id": "b1", "citations": []},
-        {"issue_id": "issue_2", "description": "Critical non-compliant termination", "severity": "CRITICAL", "block_id": "b1", "citations": []}
-      ],
-      "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
-      "recommendations": [],
-      "should_sign": null,
-      "critical_issues": [],
-      "missing_clauses": []
-    }
-    """
+    llm_json = json.dumps(
+        {
+            "document_type": "Contract",
+            "summary": "Test.",
+            "rubric_checks": _default_rubric_checks(),
+            "clauses": [
+                {
+                    "clause_id": "c1",
+                    "text": "Clause.",
+                    "risk_level": "LOW",
+                    "implications": "",
+                    "block_id": "b1",
+                    "citations": [],
+                    "ethiopian_law_implications": [],
+                    "recommendations": [],
+                    "editor_fix": None,
+                }
+            ],
+            "issues": [
+                {
+                    "issue_id": "issue_1",
+                    "description": "Vague liability cap",
+                    "severity": "MEDIUM",
+                    "block_id": "b1",
+                    "citations": [],
+                },
+                {
+                    "issue_id": "issue_2",
+                    "description": "Critical non-compliant termination",
+                    "severity": "CRITICAL",
+                    "block_id": "b1",
+                    "citations": [],
+                },
+            ],
+            "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
+            "recommendations": [],
+            "should_sign": None,
+            "critical_issues": [],
+            "missing_clauses": [],
+        }
+    )
     with (
         patch(
             "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
@@ -1049,12 +1116,18 @@ def test_analyze_document_maps_issues_for_advisor_schema():
                 ),
             ],
         ),
-        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+        patch("app.services.drafting.compliance.analysis_agent._build_analysis_llm") as mock_llm_cls,
     ):
         mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
         agent = ComplianceAnalysisAgent()
         resp = agent.analyze_document(
-            document_blocks=[{"block_id": "b1", "text": "Clause.", "type": "paragraph"}],
+            document_blocks=[
+                {
+                    "block_id": "b1",
+                    "text": "Vague liability cap and non-compliant termination terms apply here.",
+                    "type": "paragraph",
+                }
+            ],
             language="en",
         )
 
@@ -1107,48 +1180,55 @@ def test_to_clause_reads_editor_fix_from_llm_dict():
 
     from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
 
-    llm_json = """
-    {
-      "document_type": "Employment Agreement",
-      "summary": "Test.",
-      "clauses": [
+    llm_json = json.dumps(
         {
-          "clause_id": "c1",
-          "text": "Compensation excerpt.",
-          "risk_level": "HIGH",
-          "implications": "Vague compensation.",
-          "block_id": "b1",
-          "citations": [],
-          "ethiopian_law_implications": ["Labor law requires clear wages"],
-          "recommendations": ["Clarify compensation"],
-          "editor_fix": {
-            "action": "replace",
-            "block_id": "b1",
-            "clause_reference": "4. Compensation",
-            "current_text": "Compensation excerpt.",
-            "problem_summary": "Compensation terms are vague.",
-            "offending_phrases": ["as defined internally by the Company"],
-            "legal_requirement": "Employment terms must specify wages clearly.",
-            "rewrite_directive": "Rewrite to state salary, payment frequency, and benefits explicitly.",
-            "remove_phrases": ["as defined internally by the Company"],
-            "add_elements": ["base salary", "payment frequency"],
-            "suggested_text": "The Employee shall receive a monthly base salary of [AMOUNT] ETB.",
-            "placeholder_policy": "use_bracketed_placeholders_when_values_unknown",
-            "legal_basis": [{"source": "ethiopian-labor-proclamation", "article": "wages", "rationale": "Wages must be clear."}],
-            "document_language": "en",
-            "severity": "high_risk",
-            "confidence": 0.85
-          }
+            "document_type": "Employment Agreement",
+            "summary": "Test.",
+            "rubric_checks": _default_rubric_checks("Employment Agreement"),
+            "clauses": [
+                {
+                    "clause_id": "c1",
+                    "text": "The Employee's compensation may include benefits as defined internally by the Company.",
+                    "risk_level": "HIGH",
+                    "implications": "Vague compensation.",
+                    "block_id": "b1",
+                    "citations": [],
+                    "ethiopian_law_implications": ["Labor law requires clear wages"],
+                    "recommendations": ["Clarify compensation"],
+                    "editor_fix": {
+                        "action": "replace",
+                        "block_id": "b1",
+                        "clause_reference": "4. Compensation",
+                        "current_text": "Compensation excerpt.",
+                        "problem_summary": "Compensation terms are vague.",
+                        "offending_phrases": ["as defined internally by the Company"],
+                        "legal_requirement": "Employment terms must specify wages clearly.",
+                        "rewrite_directive": "Rewrite to state salary, payment frequency, and benefits explicitly.",
+                        "remove_phrases": ["as defined internally by the Company"],
+                        "add_elements": ["base salary", "payment frequency"],
+                        "suggested_text": "The Employee shall receive a monthly base salary of [AMOUNT] ETB.",
+                        "placeholder_policy": "use_bracketed_placeholders_when_values_unknown",
+                        "legal_basis": [
+                            {
+                                "source": "ethiopian-labor-proclamation",
+                                "article": "wages",
+                                "rationale": "Wages must be clear.",
+                            }
+                        ],
+                        "document_language": "en",
+                        "severity": "high_risk",
+                        "confidence": 0.85,
+                    },
+                }
+            ],
+            "issues": [],
+            "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
+            "recommendations": [],
+            "should_sign": None,
+            "critical_issues": [],
+            "missing_clauses": [],
         }
-      ],
-      "issues": [],
-      "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
-      "recommendations": [],
-      "should_sign": null,
-      "critical_issues": [],
-      "missing_clauses": []
-    }
-    """
+    )
     blocks = [
         {
             "block_id": "b1",
@@ -1179,7 +1259,11 @@ def test_to_clause_reads_editor_fix_from_llm_dict():
                 ),
             ],
         ),
-        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+        patch(
+            "app.services.drafting.compliance.analysis_agent.build_clause_legal_query",
+            return_value="Ethiopian labor wages",
+        ),
+        patch("app.services.drafting.compliance.analysis_agent._build_analysis_llm") as mock_llm_cls,
     ):
         mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
         agent = ComplianceAnalysisAgent()
@@ -1202,30 +1286,33 @@ def test_to_clause_reads_new_fields_from_llm_dict():
 
     from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
 
-    llm_json = """
-    {
-      "document_type": "Contract",
-      "summary": "Test.",
-      "clauses": [
+    llm_json = json.dumps(
         {
-          "clause_id": "c1",
-          "text": "No-compete clause.",
-          "risk_level": "HIGH",
-          "implications": "Restricts competition.",
-          "block_id": null,
-          "citations": [],
-          "ethiopian_law_implications": ["Commercial Code Art. 11 restricts anti-competitive terms"],
-          "recommendations": ["Narrow the geographic scope", "Add sunset clause"]
+            "document_type": "Contract",
+            "summary": "Test.",
+            "rubric_checks": _default_rubric_checks(),
+            "clauses": [
+                {
+                    "clause_id": "c1",
+                    "text": "No-compete clause.",
+                    "risk_level": "HIGH",
+                    "implications": "Restricts competition.",
+                    "block_id": None,
+                    "citations": [],
+                    "ethiopian_law_implications": [
+                        "Commercial Code Art. 11 restricts anti-competitive terms"
+                    ],
+                    "recommendations": ["Narrow the geographic scope", "Add sunset clause"],
+                }
+            ],
+            "issues": [],
+            "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
+            "recommendations": [],
+            "should_sign": None,
+            "critical_issues": [],
+            "missing_clauses": [],
         }
-      ],
-      "issues": [],
-      "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
-      "recommendations": [],
-      "should_sign": null,
-      "critical_issues": [],
-      "missing_clauses": []
-    }
-    """
+    )
     with (
         patch(
             "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
@@ -1249,7 +1336,7 @@ def test_to_clause_reads_new_fields_from_llm_dict():
                 ),
             ],
         ),
-        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+        patch("app.services.drafting.compliance.analysis_agent._build_analysis_llm") as mock_llm_cls,
     ):
         mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
         agent = ComplianceAnalysisAgent()
@@ -1272,19 +1359,29 @@ def test_to_clause_missing_new_fields_defaults_to_empty():
 
     from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
 
-    llm_json = """
-    {
-      "document_type": "Contract",
-      "summary": "Old format.",
-      "clauses": [{"clause_id": "c1", "text": "Clause.", "risk_level": "MEDIUM", "implications": "Some.", "block_id": null, "citations": []}],
-      "issues": [],
-      "ethiopian_law_compliance": {"summary": "", "applicable_laws": [], "concerns": []},
-      "recommendations": [],
-      "should_sign": null,
-      "critical_issues": [],
-      "missing_clauses": []
-    }
-    """
+    llm_json = json.dumps(
+        {
+            "document_type": "Contract",
+            "summary": "Old format.",
+            "rubric_checks": _default_rubric_checks(),
+            "clauses": [
+                {
+                    "clause_id": "c1",
+                    "text": "Clause.",
+                    "risk_level": "MEDIUM",
+                    "implications": "Some.",
+                    "block_id": None,
+                    "citations": [],
+                }
+            ],
+            "issues": [],
+            "ethiopian_law_compliance": {"summary": "", "applicable_laws": [], "concerns": []},
+            "recommendations": [],
+            "should_sign": None,
+            "critical_issues": [],
+            "missing_clauses": [],
+        }
+    )
     with (
         patch(
             "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
@@ -1306,7 +1403,7 @@ def test_to_clause_missing_new_fields_defaults_to_empty():
                 ),
             ],
         ),
-        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+        patch("app.services.drafting.compliance.analysis_agent._build_analysis_llm") as mock_llm_cls,
     ):
         mock_llm_cls.return_value.stream.return_value = [MagicMock(content=llm_json)]
         agent = ComplianceAnalysisAgent()
@@ -1509,22 +1606,41 @@ def test_get_available_source_files_mocked():
 def test_analyze_document_full_pipeline_mocked():
     from app.services.drafting.compliance.analysis_agent import ComplianceAnalysisAgent
 
-    llm_json = """
-    {
-      "document_type": "Contract",
-      "summary": "Low risk.",
-      "clauses": [
-        {"clause_id": "c1", "text": "Clause.", "risk_level": "LOW", "implications": "", "block_id": null, "citations": [], "ethiopian_law_implications": [], "recommendations": []},
-        {"clause_id": "c2", "text": "Liability clause.", "risk_level": "MEDIUM", "implications": "Limits liability.", "block_id": null, "citations": [], "ethiopian_law_implications": ["Art. 2035 Civil Code applies"], "recommendations": ["Clarify cap amount"]}
-      ],
-      "issues": [],
-      "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
-      "recommendations": [],
-      "should_sign": true,
-      "critical_issues": [],
-      "missing_clauses": []
-    }
-    """
+    llm_json = json.dumps(
+        {
+            "document_type": "Contract",
+            "summary": "Low risk.",
+            "rubric_checks": _default_rubric_checks(),
+            "clauses": [
+                {
+                    "clause_id": "c1",
+                    "text": "Clause.",
+                    "risk_level": "LOW",
+                    "implications": "",
+                    "block_id": None,
+                    "citations": [],
+                    "ethiopian_law_implications": [],
+                    "recommendations": [],
+                },
+                {
+                    "clause_id": "c2",
+                    "text": "Liability clause.",
+                    "risk_level": "MEDIUM",
+                    "implications": "Limits liability.",
+                    "block_id": None,
+                    "citations": [],
+                    "ethiopian_law_implications": ["Art. 2035 Civil Code applies"],
+                    "recommendations": ["Clarify cap amount"],
+                },
+            ],
+            "issues": [],
+            "ethiopian_law_compliance": {"summary": "OK", "applicable_laws": [], "concerns": []},
+            "recommendations": [],
+            "should_sign": True,
+            "critical_issues": [],
+            "missing_clauses": [],
+        }
+    )
     with (
         patch(
             "app.services.drafting.compliance.analysis_agent.generate_targeted_queries",
@@ -1534,7 +1650,8 @@ def test_analyze_document_full_pipeline_mocked():
             "app.services.drafting.compliance.analysis_agent.search_legal_knowledge"
         ) as mock_search,
         patch("app.services.drafting.compliance.analysis_agent.rerank_with_llm") as mock_rerank,
-        patch("app.services.drafting.compliance.analysis_agent.ChatOpenAI") as mock_llm_cls,
+        patch("app.services.drafting.compliance.analysis_agent.store_last_rubric_result"),
+        patch("app.services.drafting.compliance.analysis_agent._build_analysis_llm") as mock_llm_cls,
     ):
         mock_search.return_value = [
             Document(
@@ -1548,9 +1665,9 @@ def test_analyze_document_full_pipeline_mocked():
         resp = agent.analyze_document(document_text="Sample contract.", language="en")
 
         assert resp.document_type == "Contract"
-        assert resp.overall_risk_level == "LOW"  # raw_penalty=5, risk_score=3.33 → LOW
-        assert resp.risk_score == round(5 / 150 * 100, 2)
-        assert resp.compliance_score == round(100 - resp.risk_score, 2)
+        assert resp.overall_risk_level == "LOW"
+        assert resp.risk_score == 0.0
+        assert resp.compliance_score == 100.0
         assert resp.summary == "Low risk."
         assert len(resp.clauses) == 2
         assert resp.should_sign is True
@@ -1563,7 +1680,8 @@ def test_analyze_document_full_pipeline_mocked():
         assert medium_clause.ethiopian_law_implications == ["Art. 2035 Civil Code applies"]
         assert medium_clause.recommendations == ["Clarify cap amount"]
         assert isinstance(resp.score_breakdown, dict)
-        assert resp.score_breakdown["raw_penalty"] == 5  # 1 MEDIUM clause × 5
+        assert "rubric" in resp.score_breakdown
+        assert resp.score_breakdown["rubric"]["raw_penalty"] == 0
         assert resp.score_breakdown["clause_counts"]["MEDIUM"] == 1
 
 

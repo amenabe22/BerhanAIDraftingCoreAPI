@@ -31,6 +31,12 @@ without touching business logic.
 
 from __future__ import annotations
 
+from app.services.drafting.compliance.rubric import (
+    RUBRIC_VERSION,
+    STATUS_PENALTIES,
+    VALID_STATUSES,
+)
+
 # ---------------------------------------------------------------------------
 # Penalty weights
 # ---------------------------------------------------------------------------
@@ -79,6 +85,68 @@ RISK_LEVEL_THRESHOLDS: list[tuple[int, str]] = [
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def _risk_level_from_score(score: float) -> str:
+    """Map a numeric risk_score (0–100) to a severity label."""
+    for threshold, label in RISK_LEVEL_THRESHOLDS:
+        if score >= threshold:
+            return label
+    return "LOW"
+
+
+def _normalize_rubric_status(status: str | None) -> str:
+    s = (status or "MISSING").upper().strip()
+    if s not in VALID_STATUSES:
+        return "MISSING"
+    return s
+
+
+def compute_rubric_score(
+    checks: list[dict],
+    *,
+    version: str = RUBRIC_VERSION,
+    max_penalty: int = DEFAULT_MAX_PENALTY,
+) -> dict:
+    """Compute risk score from fixed rubric item statuses.
+
+    Each check dict is expected to have ``id`` and ``status`` keys.
+    """
+    status_counts: dict[str, int] = {k: 0 for k in STATUS_PENALTIES}
+    item_breakdown: list[dict] = []
+    raw_penalty = 0
+
+    for check in checks or []:
+        item_id = str(check.get("id") or "").strip()
+        status = _normalize_rubric_status(check.get("status"))
+        penalty = STATUS_PENALTIES.get(status, STATUS_PENALTIES["MISSING"])
+        status_counts[status] += 1
+        raw_penalty += penalty
+        item_breakdown.append(
+            {
+                "id": item_id,
+                "status": status,
+                "penalty": penalty,
+                "block_id": check.get("block_id"),
+            }
+        )
+
+    effective_max = max(max_penalty, 1)
+    risk_score_float = min(raw_penalty / effective_max * 100.0, 100.0)
+    risk_score = round(risk_score_float, 2)
+    compliance_score = round(100.0 - risk_score, 2)
+    overall_risk_level = _risk_level_from_score(risk_score)
+
+    return {
+        "rubric_version": version,
+        "status_counts": status_counts,
+        "item_breakdown": item_breakdown,
+        "raw_penalty": raw_penalty,
+        "max_penalty": effective_max,
+        "risk_score": risk_score,
+        "compliance_score": compliance_score,
+        "overall_risk_level": overall_risk_level,
+    }
 
 
 def compute_risk_score(
@@ -176,10 +244,3 @@ def compute_risk_score(
         "overall_risk_level": overall_risk_level,
     }
 
-
-def _risk_level_from_score(score: float) -> str:
-    """Map a numeric risk_score (0–100) to a severity label."""
-    for threshold, label in RISK_LEVEL_THRESHOLDS:
-        if score >= threshold:
-            return label
-    return "LOW"
