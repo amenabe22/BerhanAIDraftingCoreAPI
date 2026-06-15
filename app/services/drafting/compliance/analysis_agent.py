@@ -1288,6 +1288,11 @@ class ComplianceAnalysisAgent:
             prior_block_hashes,
             per_block_hashes,
         )
+        valid_ids = _valid_block_ids(blocks)
+        for check in rubric_checks:
+            bid = check.get("block_id")
+            if bid and str(bid) not in valid_ids:
+                check["block_id"] = None
         data["rubric_checks"] = rubric_checks
 
         # 5) Per-clause citations for non-LOW risk clauses with implications (level-specific)
