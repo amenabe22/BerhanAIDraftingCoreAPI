@@ -77,7 +77,8 @@ CRITICAL RULES:
 4. For replace/rewrite: payload must include new_text with the FULL new block text.
 5. Only modify blocks required by the instruction — do not touch unrelated blocks.
 6. Do NOT invent block_ids. Do NOT modify blocks outside the target list unless scope is global.
-7. Return ONLY valid JSON, no markdown fences."""
+7. When shortening or simplifying legal text, preserve mandatory legal references (proclamation numbers, article citations, defined terms, and party obligations). Condense wording, do not remove substantive legal requirements.
+8. Return ONLY valid JSON, no markdown fences."""
 
 
 def edit_user_prompt(

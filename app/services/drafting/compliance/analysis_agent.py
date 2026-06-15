@@ -879,14 +879,15 @@ class ComplianceAnalysisAgent:
                     message=f"Resolved citations for clause {clauses_with_citations} of {citation_budget}",
                 )
 
-        # 6) Build issues_by_block_id and critical_issues
+        # 6) Build issues_by_block_id and critical_issues (only valid document block_ids)
         issues = data.get("issues", []) or []
+        valid_ids = _valid_block_ids(blocks)
         issues_by_block_id: dict[str, list[dict]] = {}
         critical_issues: list[dict] = []
         for i in issues:
             bid = i.get("block_id")
-            if bid:
-                issues_by_block_id.setdefault(bid, []).append(i)
+            if bid and str(bid) in valid_ids:
+                issues_by_block_id.setdefault(str(bid), []).append(i)
             if (i.get("severity") or "").upper() in ("HIGH", "CRITICAL"):
                 critical_issues.append(i)
 
