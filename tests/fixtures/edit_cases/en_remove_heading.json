@@ -1,0 +1,6 @@
+{
+  "id": "remove_heading",
+  "instruction": "Remove the document title at the top",
+  "expected_target_blocks": ["b1"],
+  "expected_removed": ["b1"]
+}

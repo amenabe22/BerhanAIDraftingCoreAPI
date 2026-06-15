@@ -19,7 +19,7 @@ from httpx import ASGITransport, AsyncClient
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 os.environ.setdefault("OPENROUTER_API_KEY", "test-openrouter-key")
-os.environ.setdefault("COHERE_API_KEY", "test-cohere-key")
+os.environ.setdefault("COHERE_API_KEY", "")  # force keyword fallback in unit tests
 os.environ.setdefault("QDRANT_URL", "http://localhost:6333")
 os.environ.setdefault("QDRANT_API_KEY", "test-qdrant-key")
 
@@ -191,3 +191,54 @@ async def client():
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
+
+
+# ---------------------------------------------------------------------------
+# Semantic edit fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def en_doc():
+    from tests.fixtures.tiptap_docs import make_en_doc
+
+    return make_en_doc()
+
+
+@pytest.fixture
+def amharic_doc():
+    from tests.fixtures.tiptap_docs import make_amharic_doc
+
+    return make_amharic_doc()
+
+
+@pytest.fixture
+def multi_page_doc():
+    from tests.fixtures.tiptap_docs import make_multi_page_doc
+
+    return make_multi_page_doc()
+
+
+def make_mock_locate_result(block_id: str, action: str = "replace", confidence: float = 0.9):
+    return {
+        "targets": [{"block_id": block_id, "action": action, "confidence": confidence, "reason": "test"}],
+        "scope": "single",
+        "confidence": confidence,
+    }
+
+
+def make_mock_edit_ops(block_id: str, new_text: str, op_type: str = "replace"):
+    return {
+        "operations": [
+            {
+                "op_id": "op123456",
+                "type": op_type,
+                "block_id": block_id,
+                "payload": {"new_text": new_text},
+            }
+        ]
+    }
+
+
+def make_mock_verify_result(passed: bool = True, feedback: str = ""):
+    return {"passed": passed, "issues": [] if passed else ["test issue"], "feedback": feedback}

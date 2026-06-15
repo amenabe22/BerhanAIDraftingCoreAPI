@@ -1,0 +1,7 @@
+{
+  "id": "amharic_edit",
+  "instruction": "የሳምንቱ የስራ ሰዓትን ከ40 ወደ 35 ሰዓት ቀይር",
+  "expected_target_blocks": ["b2"],
+  "doc_fixture": "amharic",
+  "document_language": "am"
+}

@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     KNOWLEDGE_RERANK_INITIAL_LIMIT: int = 25
     KNOWLEDGE_RERANK_TOP: int = 10
 
+    # Semantic edit agent
+    EDIT_MODEL: str | None = None  # default: GEMINI_MODEL
+    COHERE_RERANK_MODEL: str = "rerank-multilingual-v3.0"
+    EDIT_RERANK_TOP_K: int = 12
+    EDIT_SELECTOR_TOP_K: int = 10
+    EDIT_MIN_CONFIDENCE: float = 0.55
+    EDIT_MAX_REVISIONS: int = 2
+
     @field_validator("QDRANT_API_KEY", "COHERE_API_KEY", mode="before")
     @classmethod
     def strip_api_key_comment(cls, v: str | None) -> str | None:

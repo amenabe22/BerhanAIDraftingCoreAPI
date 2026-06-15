@@ -1,0 +1,6 @@
+{
+  "id": "insert_after_clause",
+  "instruction": "Add a new paragraph after the working hours clause saying overtime requires prior approval",
+  "expected_target_blocks": ["b2"],
+  "expected_contains": "Overtime"
+}

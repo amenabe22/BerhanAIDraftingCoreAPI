@@ -1,0 +1,6 @@
+{
+  "id": "global_replace_hours",
+  "instruction": "Change forty to thirty-five everywhere",
+  "expected_target_blocks": ["b2"],
+  "expected_contains": "thirty-five"
+}
