@@ -5,6 +5,7 @@ from enum import Enum
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
@@ -69,6 +70,19 @@ class DocChatRequest(BaseModel):
 
 
 app = FastAPI(title="Berhan Advisor Knowledge Agent")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://docs.berhan.ai",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin"],
+    max_age=86400,
+)
 
 app.include_router(compliance_router, prefix="/drafting")
 app.include_router(edit_router, prefix="/drafting")
@@ -179,6 +193,13 @@ def _human_message_content(message: str, file_url: str | None) -> str | list:
     ]
 
 
+def _user_facing_stream_error(message: str) -> str:
+    lower = (message or "").strip().lower()
+    if "json error injected into sse stream" in lower:
+        return "The AI service had a temporary connection issue. Please try again."
+    return message or "Upstream error"
+
+
 async def _stream_endpoint(
     request: ChatRequest,
     event_type: str,
@@ -257,7 +278,7 @@ async def _stream_endpoint(
                     continue
 
                 if mode == "error":
-                    yield f"data: {json.dumps({'type': 'error', 'message': str(payload)})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'message': _user_facing_stream_error(str(payload))})}\n\n"
                     return
 
                 if mode != "messages":
@@ -286,7 +307,7 @@ async def _stream_endpoint(
                 "stream error",
                 extra={"event": "stream_error", "error": str(exc), "thread_id": thread_id},
             )
-            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': _user_facing_stream_error(str(exc))})}\n\n"
             return
         finally:
             await stream_task

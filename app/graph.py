@@ -1,4 +1,5 @@
 import json
+import time
 from functools import lru_cache
 from typing import Annotated, Literal, TypedDict
 
@@ -178,15 +179,44 @@ def _chunk_to_text(content: object) -> str:
     return ""
 
 
-def _stream_llm_response(llm_with_tools, messages_to_send: list[BaseMessage]) -> AIMessage:
-    """Stream token chunks while still returning one final AIMessage for graph state."""
-    writer = None
-    try:
-        writer = get_stream_writer()
-    except RuntimeError:
-        # Called outside a LangGraph runtime context (e.g. unit tests invoking
-        # the node directly). In that case, skip custom stream events.
-        writer = None
+_LLM_STREAM_MAX_ATTEMPTS = 3
+# OpenRouter occasionally injects mid-stream error SSE when an upstream provider 500s.
+_TRANSIENT_LLM_STREAM_MARKERS = (
+    "json error injected into sse stream",
+    "unexpected end of json",
+    "jsondecodeerror",
+    "connection reset by peer",
+    "provider disconnected",
+    "overloaded",
+)
+
+
+def _is_transient_llm_stream_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    name = type(exc).__name__.lower()
+    if "timeout" in msg or "timeout" in name:
+        return True
+    return any(marker in msg for marker in _TRANSIENT_LLM_STREAM_MARKERS)
+
+
+def _invoke_with_token_writer(
+    llm_with_tools,
+    messages_to_send: list[BaseMessage],
+    writer,
+) -> AIMessage:
+    """Non-streaming fallback that still emits one token event for SSE clients."""
+    response = llm_with_tools.invoke(messages_to_send)
+    text = _chunk_to_text(getattr(response, "content", ""))
+    if text and writer is not None:
+        writer({"type": "token", "content": text})
+    return response
+
+
+def _stream_llm_response_once(
+    llm_with_tools,
+    messages_to_send: list[BaseMessage],
+    writer,
+) -> AIMessage:
     full_chunk: AIMessageChunk | None = None
     saw_stream_chunk = False
 
@@ -199,13 +229,46 @@ def _stream_llm_response(llm_with_tools, messages_to_send: list[BaseMessage]) ->
         if text and writer is not None:
             writer({"type": "token", "content": text})
 
-    if not saw_stream_chunk:
-        return llm_with_tools.invoke(messages_to_send)
-
-    if full_chunk is None:
-        return llm_with_tools.invoke(messages_to_send)
+    if not saw_stream_chunk or full_chunk is None:
+        return _invoke_with_token_writer(llm_with_tools, messages_to_send, writer)
 
     return message_chunk_to_message(full_chunk)
+
+
+def _stream_llm_response(llm_with_tools, messages_to_send: list[BaseMessage]) -> AIMessage:
+    """Stream token chunks while still returning one final AIMessage for graph state."""
+    writer = None
+    try:
+        writer = get_stream_writer()
+    except RuntimeError:
+        # Called outside a LangGraph runtime context (e.g. unit tests invoking
+        # the node directly). In that case, skip custom stream events.
+        writer = None
+
+    for attempt in range(1, _LLM_STREAM_MAX_ATTEMPTS + 1):
+        try:
+            return _stream_llm_response_once(llm_with_tools, messages_to_send, writer)
+        except Exception as exc:
+            if attempt < _LLM_STREAM_MAX_ATTEMPTS and _is_transient_llm_stream_error(exc):
+                log.warning(
+                    "LLM stream attempt failed (transient), retrying",
+                    extra={
+                        "event": "llm_stream_retry",
+                        "attempt": attempt,
+                        "error": str(exc),
+                    },
+                )
+                time.sleep(0.4 * attempt)
+                continue
+            log.warning(
+                "LLM stream failed, falling back to invoke",
+                extra={
+                    "event": "llm_stream_fallback",
+                    "attempt": attempt,
+                    "error": str(exc),
+                },
+            )
+            return _invoke_with_token_writer(llm_with_tools, messages_to_send, writer)
 
 
 def _agent_node(state: dict) -> dict:

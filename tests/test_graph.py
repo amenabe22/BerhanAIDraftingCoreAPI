@@ -155,6 +155,45 @@ def test_agent_node_tool_call_args_invalid_json_string():
         _agent_node(_state(HumanMessage(content="question")))
 
 
+def test_is_transient_llm_stream_error_openrouter_injection():
+    from app.graph import _is_transient_llm_stream_error
+
+    assert _is_transient_llm_stream_error(Exception("JSON error injected into SSE stream"))
+
+
+def test_stream_llm_response_retries_then_succeeds():
+    from app.graph import _stream_llm_response
+
+    mock_llm = MagicMock()
+    mock_llm.stream.side_effect = [
+        RuntimeError("JSON error injected into SSE stream"),
+        [AIMessageChunk(content="Recovered answer")],
+    ]
+    mock_llm.invoke.return_value = AIMessage(content="fallback")
+
+    with patch("app.graph.get_stream_writer", side_effect=RuntimeError):
+        result = _stream_llm_response(mock_llm, [HumanMessage(content="hi")])
+
+    assert result.content == "Recovered answer"
+    assert mock_llm.stream.call_count == 2
+    mock_llm.invoke.assert_not_called()
+
+
+def test_stream_llm_response_falls_back_to_invoke_after_persistent_failure():
+    from app.graph import _stream_llm_response
+
+    mock_llm = MagicMock()
+    mock_llm.stream.side_effect = RuntimeError("JSON error injected into SSE stream")
+    mock_llm.invoke.return_value = AIMessage(content="Non-stream fallback")
+
+    with patch("app.graph.get_stream_writer", side_effect=RuntimeError):
+        result = _stream_llm_response(mock_llm, [HumanMessage(content="hi")])
+
+    assert result.content == "Non-stream fallback"
+    assert mock_llm.stream.call_count == 3
+    mock_llm.invoke.assert_called_once()
+
+
 def test_compiled_graph_emits_multiple_custom_token_events():
     """Regression guard: compiled graph must expose real custom token chunks, not only a final message."""
     from app.graph import build_graph
