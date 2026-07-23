@@ -241,6 +241,8 @@ async def _stream_endpoint(
         status_sent = False
         saw_custom_tokens = False
         fallback_token_chunks: list[str] = []
+        # Capture the last grounding event emitted by the ground node (if any)
+        last_grounding_event: dict | None = None
         loop = asyncio.get_running_loop()
         stream_q: asyncio.Queue[tuple[str, object] | None] = asyncio.Queue()
 
@@ -270,11 +272,25 @@ async def _stream_endpoint(
 
                 mode, payload = item
                 if mode == "custom":
-                    if isinstance(payload, dict) and payload.get("type") == "token":
-                        content = payload.get("content", "")
-                        if content:
-                            saw_custom_tokens = True
-                            yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                    if isinstance(payload, dict):
+                        ptype = payload.get("type")
+                        if ptype == "token":
+                            content = payload.get("content", "")
+                            if content:
+                                saw_custom_tokens = True
+                                yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                        elif ptype == "status":
+                            # Pass through status messages from grounding / repair
+                            msg = payload.get("message", "")
+                            if msg:
+                                yield f"data: {json.dumps({'type': 'status', 'message': msg})}\n\n"
+                        elif ptype == "grounding":
+                            # Capture most-recent grounding event — emit at end of stream
+                            last_grounding_event = {
+                                "ok": payload.get("ok", True),
+                                "repair_attempted": payload.get("repair_attempted", False),
+                                "reason": payload.get("reason"),
+                            }
                     continue
 
                 if mode == "error":
@@ -318,9 +334,15 @@ async def _stream_endpoint(
         if not saw_custom_tokens:
             for content in fallback_token_chunks:
                 yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+
+        # Existing citations event — unchanged
         citations = _parse_citations(collected)
         if citations:
             yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
+
+        # Additive grounding event — old clients ignore unknown types
+        if last_grounding_event is not None:
+            yield f"data: {json.dumps({'type': 'grounding', **last_grounding_event})}\n\n"
 
     return StreamingResponse(
         event_stream(),

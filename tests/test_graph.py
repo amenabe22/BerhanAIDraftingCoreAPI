@@ -50,21 +50,21 @@ def test_should_continue_returns_end_when_no_tool_calls():
     from app.graph import _should_continue
 
     state = _state(_ai_no_tool_calls())
-    assert _should_continue(state) == "__end__"
+    assert _should_continue(state) == "ground"
 
 
 def test_should_continue_returns_end_for_plain_ai_message():
     from app.graph import _should_continue
 
     state = _state(AIMessage(content="Here is your answer."))
-    assert _should_continue(state) == "__end__"
+    assert _should_continue(state) == "ground"
 
 
 def test_should_continue_returns_end_for_human_message():
     from app.graph import _should_continue
 
     state = _state(HumanMessage(content="What is contract law?"))
-    assert _should_continue(state) == "__end__"
+    assert _should_continue(state) == "ground"
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +221,11 @@ def test_compiled_graph_emits_multiple_custom_token_events():
         ):
             events.append((mode, payload))
 
-    custom_tokens = [payload["content"] for mode, payload in events if mode == "custom"]
+    custom_tokens = [
+        payload["content"]
+        for mode, payload in events
+        if mode == "custom" and isinstance(payload, dict) and payload.get("type") == "token"
+    ]
     assert custom_tokens == ["Hello ", "world"]
 
 

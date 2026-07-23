@@ -1,0 +1,12 @@
+{
+  "id": "limitation_163",
+  "description": "Statute of limitations for inheritance claim — must cite Civil Code Article 1677 when present in KB payload",
+  "query": "የይርጋ ገደብ: የውርስ ጥያቄ የይርጋ ገደብ ሊኖረው ይችላል። የፍትሐብሔር ህጉ ምን ይላል?",
+  "expect_kb_gap": false,
+  "require_pinpoint": true,
+  "preferred_instruments": ["civil", "1677"],
+  "forbidden_primary": [],
+  "tool_payload": "[Source: english-civil-code-1960 | Article 1677 | Prescription of ten years]\n(1) Actions not governed by special provisions for shorter or longer prescriptions shall be prescribed by ten years.\n(2) Such prescription shall apply in particular to actions arising from obligations created by law, such as inheritance claims and claims for the return of property.\n\n[Source: english-civil-code-1960 | Article 1000 | Succession on death]\nSuccession opens at the place of the last residence of the deceased. The estate shall devolve on the heirs as a whole from the moment the succession opens.",
+  "expected_answer_contains_any": ["1677", "Article 1677", "አንቀጽ 1677", "ten years", "10", "ዓመት"],
+  "expected_answer_forbidden_any": []
+}

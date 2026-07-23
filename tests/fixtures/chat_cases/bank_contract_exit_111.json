@@ -1,0 +1,12 @@
+{
+  "id": "bank_contract_exit_111",
+  "description": "Contract termination advice must include ≥1 pinpoint article, not a pure procedural playbook",
+  "query": "አንድ ደንበኛዬ ከባንክ ጋር ውል ፈፀመ። ውሉን ለማፍረስ ቢፈልግ በህግ ምን ትመክረዋለህ?",
+  "expect_kb_gap": false,
+  "require_pinpoint": true,
+  "preferred_instruments": ["civil", "contract"],
+  "forbidden_primary": [],
+  "tool_payload": "[Source: english-civil-code-1960 | Article 1675 | Contract defined]\nA contract is an agreement whereby two or more persons as between themselves create, vary or extinguish obligations of a proprietary nature.\n\n[Source: english-civil-code-1960 | Article 1771 | Rescission for non-performance]\nA party may demand the cancellation of the contract where the other party fails to perform his obligations and where notice to perform has been ineffective.",
+  "expected_answer_contains_any": ["1675", "1771", "Article", "አንቀጽ"],
+  "expected_answer_forbidden_any": []
+}

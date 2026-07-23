@@ -1,0 +1,13 @@
+{
+  "id": "tax_gifts_184",
+  "description": "Tax exemptions on gifts/prizes — must cite Income Tax Proclamation article numbers; no invention of rules",
+  "query": "What income is exempt from tax in Ethiopia? I want to understand gifts, prizes and international income.",
+  "expect_kb_gap": false,
+  "require_pinpoint": true,
+  "preferred_instruments": ["tax", "income"],
+  "forbidden_primary": [],
+  "tool_payload": "[Source: income-tax-proclamation-979-2016 | Article 14 | Exempt income]\nThe following receipts are exempt from income tax: (a) income of foreign diplomatic missions and their employees; (b) amounts received as compensation for personal injury; (c) income of approved non-profit organizations from their approved activities.\n\n[Source: income-tax-proclamation-979-2016 | Article 14 | Exempt income continued]\n(d) amounts received as a gift from a spouse, a person related by blood or marriage to the second degree, if the recipient can establish the gift relationship to the satisfaction of the Authority.",
+  "expected_answer_contains_any": ["Article 14", "979", "Proclamation", "አንቀጽ"],
+  "expected_answer_forbidden_any": ["without basis", "I cannot confirm the exact article"],
+  "kb_gap_scenario": false
+}

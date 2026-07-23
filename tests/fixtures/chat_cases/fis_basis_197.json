@@ -1,0 +1,29 @@
+{
+  "id": "fis_basis_197",
+  "description": "FIS account freeze — when retrieval returns no provision, agent must acknowledge KB gap; no invented durations",
+  "query": "ለስንት ጊዜ ነው FIS አካውንት ማገድ የሚችለው?",
+  "expect_kb_gap": true,
+  "require_pinpoint": false,
+  "preferred_instruments": [],
+  "forbidden_primary": [],
+  "tool_payload": "",
+  "expected_answer_contains_any": [
+    "knowledge base",
+    "cannot confirm",
+    "no specific provision",
+    "ማግኘት አልቻልኩም",
+    "አልተገኘም",
+    "ተገቢ ድንጋጌ",
+    "consult",
+    "ጠበቃ"
+  ],
+  "expected_answer_forbidden_any": [
+    "72 hours",
+    "48 hours",
+    "30 days",
+    "6 months",
+    "ቀን ውስጥ",
+    "ሳምንት ውስጥ"
+  ],
+  "kb_gap_scenario": true
+}

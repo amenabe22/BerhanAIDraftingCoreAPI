@@ -1,0 +1,29 @@
+{
+  "id": "cassation_33945_178",
+  "description": "Cassation case file lookup — KB gap expected; must not invent holdings or pretend to have the case",
+  "query": "የሰ/መ/ቁ. 33945 ጥቅምት 20 ቀን 2001 ዓ.ም የሰበር ውሳኔ ምን ይላል?",
+  "expect_kb_gap": true,
+  "require_pinpoint": false,
+  "preferred_instruments": ["cassation"],
+  "forbidden_primary": [],
+  "tool_payload": "",
+  "expected_answer_contains_any": [
+    "cannot find",
+    "not found",
+    "knowledge base",
+    "ማግኘት አልቻልኩም",
+    "አልተገኘም",
+    "ዝርዝሩን ለማግኘት",
+    "consult",
+    "volume",
+    "ጥራዝ"
+  ],
+  "expected_answer_forbidden_any": [
+    "the case held",
+    "the court decided",
+    "the ruling states",
+    "the court found",
+    "ፍርድ ቤቱ ወሰነ"
+  ],
+  "kb_gap_scenario": true
+}

@@ -1,0 +1,12 @@
+{
+  "id": "commercial_director_194",
+  "description": "Company director binding company without board resolution — must cite Commercial Code 1243/2021, not Civil Code only",
+  "query": "Can a company director bind the company without a board resolution? Analyze under Ethiopian law with citations.",
+  "expect_kb_gap": false,
+  "require_pinpoint": true,
+  "preferred_instruments": ["commercial", "1243"],
+  "forbidden_primary": ["civil_code", "civil-code"],
+  "tool_payload": "[Source: ethiopian-commercial-code-2021 | Article 346 | Powers of directors]\nA director of a share company may bind the company in transactions within the scope of the company's business object unless the articles or bylaws restrict such authority. Third parties acting in good faith are not bound by internal limitations.\n\n[Source: ethiopian-commercial-code-2021 | Article 347 | Board resolutions]\nDecisions exceeding ordinary management require a board resolution adopted by the majority of directors present at a quorum meeting.",
+  "expected_answer_contains_any": ["1243", "Commercial Code", "Article 346", "Article 347"],
+  "expected_answer_forbidden_any": []
+}

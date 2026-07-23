@@ -118,6 +118,56 @@ class _LoggingRetriever(BaseRetriever):
         return docs
 
 
+class _RoutingRetriever(BaseRetriever):
+    """Wraps the legal KB retriever with instrument-aware query enrichment.
+
+    Before each retrieval call the user query is routed through
+    ``instrument_router.route()`` which returns a ``RouteDecision``.  The
+    ``query_suffix`` from that decision is appended to the raw query string so
+    Qdrant's semantic search is anchored to the correct legal corpus (e.g.
+    "Commercial Code Proclamation 1243/2021" for company/director questions).
+
+    This wrapper also emits a structured log entry with ``route_decision`` so
+    operators can track which instrument was selected and whether a KB gap was
+    expected.
+    """
+
+    retriever: BaseRetriever
+
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> list[Document]:
+        from app.services.legal.instrument_router import route
+
+        decision = route(query)
+        enriched = query
+        if decision.query_suffix:
+            enriched = f"{query} {decision.query_suffix}"
+
+        log.info(
+            "routing_decision",
+            extra={
+                "event": "instrument_route",
+                "original_query": query,
+                "enriched_query": enriched,
+                "query_suffix": decision.query_suffix,
+                "expect_kb_gap": decision.expect_kb_gap,
+                "forbidden_primary": decision.forbidden_primary,
+            },
+        )
+
+        docs = self.retriever.invoke(enriched)
+
+        log.info(
+            "routing_retrieval_done",
+            extra={
+                "event": "instrument_route",
+                "phase": "results",
+                "doc_count": len(docs),
+                "expect_kb_gap": decision.expect_kb_gap,
+            },
+        )
+        return docs
+
+
 def get_document_blocks_by_doc_id(doc_id: str) -> list[dict]:
     """Load document blocks from doc_blocks by doc_id. Returns list of dicts with block_id, text, type (and doc_id). Supports both payload schemas (text/block_id/type and plain_text/section_id/section_type)."""
     client = _get_qdrant_client()
@@ -198,15 +248,28 @@ def get_retriever_tool():
             f"Cannot connect to Qdrant collection '{settings.QDRANT_LEGAL_KNOWLEDGE_COLLECTION}': {e}"
         ) from e
     inner = vector_store.as_retriever(search_kwargs={"k": settings.RETRIEVAL_LEGAL_TOP_K})
-    retriever = _LoggingRetriever(retriever=inner)
-    # Include document_id (source/book), item_id, title so the LLM can cite them
+    # Stack: plain retriever → logging → routing/query-enrichment
+    logging_retriever = _LoggingRetriever(retriever=inner)
+    retriever = _RoutingRetriever(retriever=logging_retriever)
+    # Include document_id (source/book), item_id, title so the LLM can cite them.
+    # The [Source: …] header is parsed by _parse_citations in app/main.py and by
+    # the grounding verifier — do not change this format without updating both.
     document_prompt = PromptTemplate.from_template(
         "[Source: {document_id} | Article {item_id} | {title}]\n{page_content}"
     )
     return create_retriever_tool(
         retriever,
         name="search_legal_knowledge",
-        description="Search the legal knowledge base for relevant articles, provisions, and legal content. Use this for ANY legal question — including contracts, obligations, property, family law, inheritance, employment, criminal procedure, business law, constitutional rights, and all other areas of Ethiopian law. Returns document_id (source name), item_id (article number), title, and article content.",
+        description=(
+            "Search the Ethiopian legal knowledge base for relevant articles, provisions, and "
+            "legal content. ALWAYS call this tool before making any legal statement or conclusion. "
+            "Use for ANY legal question — contracts, obligations, property, family law, "
+            "inheritance, employment, criminal procedure, business / commercial law, "
+            "constitutional rights, tax, and all other areas of Ethiopian law. "
+            "On follow-up turns that extend or add legal claims, call this tool again. "
+            "Returns document_id (source/instrument name), item_id (article number), "
+            "title, and article content — cite these in your answer."
+        ),
         document_prompt=document_prompt,
     )
 
