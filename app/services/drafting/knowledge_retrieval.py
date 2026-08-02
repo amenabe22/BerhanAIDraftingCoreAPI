@@ -292,3 +292,47 @@ def get_available_source_files() -> list[str]:
         extra={"event": "sources_loaded", "count": len(_available_sources_cache)},
     )
     return _available_sources_cache
+
+
+def expand_chat_query(query: str) -> list[str]:
+    """Generate 2-3 semantically diverse sub-queries from a single chat tool query.
+
+    Uses the fast default LLM (temperature=0, deterministic). Returns the
+    sub-query strings (not including the original query). Returns an empty list
+    on any failure so the caller can degrade gracefully to single-query search.
+
+    Each sub-query targets a different semantic angle of the question so that
+    subsequent RRF fusion covers the retrieval space more thoroughly than a
+    single dense query would.
+    """
+    if not query or not query.strip():
+        return []
+    prompt = (
+        "You are helping retrieve relevant Ethiopian law articles for a legal question.\n\n"
+        f"User question: {query.strip()}\n\n"
+        "Output exactly 2 to 3 short search queries that would find the most relevant Ethiopian "
+        "legal provisions (Civil Code, proclamations, regulations) to answer this question. "
+        "Each query must approach the topic from a different semantic angle — use different "
+        "legal terminology, synonyms, or sub-concepts. Do NOT paraphrase the same query. "
+        "Output only the queries, one per line, no numbering, bullets, or extra text."
+    )
+    try:
+        llm = _compliance_llm()
+        response = llm.invoke(prompt)
+        text = (response.content if hasattr(response, "content") else str(response)).strip()
+        sub_queries = [q.strip() for q in text.splitlines() if q.strip()][:3]
+        log.info(
+            "expand_chat_query",
+            extra={
+                "event": "chat_query_expand",
+                "original": query,
+                "sub_queries": sub_queries,
+            },
+        )
+        return sub_queries
+    except Exception as e:
+        log.warning(
+            "expand_chat_query failed",
+            extra={"event": "chat_query_expand_error", "error": str(e)},
+        )
+        return []

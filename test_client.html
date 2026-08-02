@@ -45,11 +45,26 @@
     .status-bar { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.4rem 0.65rem; background: #fefce8; border: 1px solid #fde047; border-radius: 4px; font-size: 0.8rem; color: #854d0e; }
     .status-bar .spinner { width: 12px; height: 12px; border: 2px solid #fde047; border-top-color: #854d0e; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    /* Language selector */
+    /* Language / model selector rows */
     .lang-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
     .lang-row label { margin: 0; font-size: 0.8rem; color: #64748b; white-space: nowrap; }
     .lang-select { padding: 0.35rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.8rem; background: white; color: #1e293b; cursor: pointer; }
     .lang-select:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
+    /* Reasoning toggle */
+    .reasoning-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+    .reasoning-row label { margin: 0; font-size: 0.8rem; color: #64748b; }
+    .reasoning-row .hint { font-size: 0.75rem; color: #94a3b8; }
+    /* Active model badge */
+    .model-badge { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.4rem; padding: 0.25rem 0.6rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; font-size: 0.75rem; color: #1d4ed8; font-family: monospace; }
+    .model-badge .reasoning-on { color: #7c3aed; font-weight: 600; margin-left: 0.3rem; }
+    /* Thinking panel */
+    .thinking-wrap { margin-top: 0.5rem; border: 1px solid #e9d5ff; border-radius: 6px; overflow: hidden; }
+    .thinking-toggle { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.65rem; background: #faf5ff; cursor: pointer; font-size: 0.78rem; color: #7c3aed; user-select: none; border: none; width: 100%; text-align: left; }
+    .thinking-toggle:hover { background: #f3e8ff; }
+    .thinking-toggle .arrow { transition: transform 0.15s; display: inline-block; }
+    .thinking-toggle.open .arrow { transform: rotate(90deg); }
+    .thinking-body { display: none; padding: 0.6rem 0.75rem; background: #fefcff; font-size: 0.78rem; color: #6b21a8; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto; font-family: monospace; line-height: 1.5; }
+    .thinking-body.visible { display: block; }
     /* Compliance stream progress */
     .compliance-progress-wrap { margin-top: 0.5rem; display: none; }
     .compliance-progress-track { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
@@ -94,16 +109,37 @@
         <option value="om">Oromo – Afaan Oromoo</option>
       </select>
     </div>
+    <div class="lang-row">
+      <label for="searchModel">Model</label>
+      <select id="searchModel" class="lang-select">
+        <option value="">Server default (gemini-2.5-flash)</option>
+        <option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option>
+        <option value="google/gemini-2.5-pro">google/gemini-2.5-pro</option>
+        <option value="anthropic/claude-sonnet-4">anthropic/claude-sonnet-4</option>
+        <option value="openai/gpt-4.1">openai/gpt-4.1</option>
+        <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
+      </select>
+    </div>
+    <div class="reasoning-row">
+      <input type="checkbox" id="searchReasoning" />
+      <label for="searchReasoning">Enable extended reasoning</label>
+      <span class="hint">(effort=medium, slower first token)</span>
+    </div>
     <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
       <button type="button" id="searchBtn">Send</button>
       <button type="button" id="searchNewBtn" class="secondary">New conversation</button>
     </div>
+    <div id="searchModelBadge" style="display:none;"></div>
     <div id="searchThreadBar" class="thread-bar" style="display:none;">
       <span class="label">Conversation ID</span>
       <span class="tid" id="searchThreadId"></span>
       <button type="button" class="secondary" onclick="copyThreadId('searchThreadId')">Copy</button>
     </div>
     <div id="searchStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="searchStatusMsg"></span></div>
+    <div id="searchThinking" class="thinking-wrap" style="display:none;">
+      <button type="button" class="thinking-toggle" onclick="toggleThinking('searchThinking')"><span class="arrow">▶</span> Reasoning trace</button>
+      <div class="thinking-body" id="searchThinkingBody"></div>
+    </div>
     <div id="searchAnswer" class="answer" style="display:none;"></div>
     <div id="searchCitations" class="citations" style="display:none;"></div>
   </section>
@@ -129,16 +165,37 @@
         <option value="om">Oromo – Afaan Oromoo</option>
       </select>
     </div>
+    <div class="lang-row">
+      <label for="agentModel">Model</label>
+      <select id="agentModel" class="lang-select">
+        <option value="">Server default (gemini-2.5-flash)</option>
+        <option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option>
+        <option value="google/gemini-2.5-pro">google/gemini-2.5-pro</option>
+        <option value="anthropic/claude-sonnet-4">anthropic/claude-sonnet-4</option>
+        <option value="openai/gpt-4.1">openai/gpt-4.1</option>
+        <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
+      </select>
+    </div>
+    <div class="reasoning-row">
+      <input type="checkbox" id="agentReasoning" />
+      <label for="agentReasoning">Enable extended reasoning</label>
+      <span class="hint">(effort=medium, slower first token)</span>
+    </div>
     <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
       <button type="button" id="agentBtn">Send</button>
       <button type="button" id="agentNewBtn" class="secondary">New conversation</button>
     </div>
+    <div id="agentModelBadge" style="display:none;"></div>
     <div id="agentThreadBar" class="thread-bar" style="display:none;">
       <span class="label">Conversation ID</span>
       <span class="tid" id="agentThreadId"></span>
       <button type="button" class="secondary" onclick="copyThreadId('agentThreadId')">Copy</button>
     </div>
     <div id="agentStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="agentStatusMsg"></span></div>
+    <div id="agentThinking" class="thinking-wrap" style="display:none;">
+      <button type="button" class="thinking-toggle" onclick="toggleThinking('agentThinking')"><span class="arrow">▶</span> Reasoning trace</button>
+      <div class="thinking-body" id="agentThinkingBody"></div>
+    </div>
     <div id="agentAnswer" class="answer" style="display:none;"></div>
     <div id="agentCitations" class="citations" style="display:none;"></div>
   </section>
@@ -316,13 +373,38 @@
       document.getElementById('docCitations').style.display = 'none';
     });
 
-    async function streamEndpoint(url, message, stateKey, barId, tidElId, answerEl, citationsEl, btn, statusBarId, statusMsgId, extraBody = {}) {
+    function toggleThinking(wrapId) {
+      const wrap = document.getElementById(wrapId);
+      const btn = wrap.querySelector('.thinking-toggle');
+      const body = wrap.querySelector('.thinking-body');
+      btn.classList.toggle('open');
+      body.classList.toggle('visible');
+    }
+
+    function showModelBadge(badgeId, model, enableReasoning) {
+      const el = document.getElementById(badgeId);
+      if (!el || !model) return;
+      el.style.display = 'block';
+      el.innerHTML = '<span class="model-badge">⚡ ' + model.replace(/</g, '&lt;') +
+        (enableReasoning ? '<span class="reasoning-on">· reasoning on</span>' : '') + '</span>';
+    }
+
+    async function streamEndpoint(url, message, stateKey, barId, tidElId, answerEl, citationsEl, btn, statusBarId, statusMsgId, modelBadgeId, thinkingWrapId, extraBody = {}) {
       btn.disabled = true;
       answerEl.style.display = 'block';
       answerEl.innerHTML = '<span style="color:#94a3b8">…</span>';
       citationsEl.style.display = 'none';
       citationsEl.innerHTML = '';
       document.getElementById(statusBarId).style.display = 'none';
+      if (modelBadgeId) document.getElementById(modelBadgeId).style.display = 'none';
+      if (thinkingWrapId) {
+        const tw = document.getElementById(thinkingWrapId);
+        tw.style.display = 'none';
+        const tb = tw.querySelector('.thinking-body');
+        if (tb) tb.textContent = '';
+        const tog = tw.querySelector('.thinking-toggle');
+        if (tog) { tog.classList.remove('open'); tb && tb.classList.remove('visible'); }
+      }
 
       try {
         const r = await fetch(baseUrl() + url, {
@@ -357,6 +439,16 @@
               if (data.type === 'thread_id') {
                 state[stateKey] = data.thread_id;
                 setThreadBar(barId, tidElId, data.thread_id);
+              } else if (data.type === 'model' && modelBadgeId) {
+                showModelBadge(modelBadgeId, data.model, data.enable_reasoning);
+              } else if (data.type === 'thinking' && thinkingWrapId && data.content) {
+                const tw = document.getElementById(thinkingWrapId);
+                const tb = tw.querySelector('.thinking-body');
+                if (tw && tb) {
+                  tw.style.display = 'block';
+                  tb.textContent += data.content;
+                  tb.scrollTop = tb.scrollHeight;
+                }
               } else if (data.type === 'status') {
                 const sb = document.getElementById(statusBarId);
                 document.getElementById(statusMsgId).textContent = data.message;
@@ -388,6 +480,15 @@
       return v ? { language: v } : {};
     }
 
+    function modelExtra(selectId, reasoningId) {
+      const model = document.getElementById(selectId).value;
+      const reasoning = document.getElementById(reasoningId).checked;
+      return {
+        ...(model ? { model } : {}),
+        enable_reasoning: reasoning,
+      };
+    }
+
     document.getElementById('searchBtn').addEventListener('click', () => {
       const message = document.getElementById('searchMessage').value.trim();
       if (!message) return;
@@ -398,7 +499,8 @@
         document.getElementById('searchCitations'),
         document.getElementById('searchBtn'),
         'searchStatusBar', 'searchStatusMsg',
-        { ...langExtra('searchLang'), ...(fileUrl ? { file_url: fileUrl } : {}) });
+        'searchModelBadge', 'searchThinking',
+        { ...langExtra('searchLang'), ...modelExtra('searchModel', 'searchReasoning'), ...(fileUrl ? { file_url: fileUrl } : {}) });
     });
 
     document.getElementById('agentBtn').addEventListener('click', () => {
@@ -411,7 +513,8 @@
         document.getElementById('agentCitations'),
         document.getElementById('agentBtn'),
         'agentStatusBar', 'agentStatusMsg',
-        { ...langExtra('agentLang'), ...(fileUrl ? { file_url: fileUrl } : {}) });
+        'agentModelBadge', 'agentThinking',
+        { ...langExtra('agentLang'), ...modelExtra('agentModel', 'agentReasoning'), ...(fileUrl ? { file_url: fileUrl } : {}) });
     });
 
     document.getElementById('docBtn').addEventListener('click', () => {
@@ -429,6 +532,7 @@
         document.getElementById('docCitations'),
         document.getElementById('docBtn'),
         'docStatusBar', 'docStatusMsg',
+        null, null,
         { doc_id: docId, ...langExtra('docLang') });
     });
 

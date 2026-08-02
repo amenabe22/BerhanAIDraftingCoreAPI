@@ -68,6 +68,7 @@ def _get_qdrant_client() -> QdrantClient:
         url=settings.QDRANT_URL,
         api_key=settings.QDRANT_API_KEY,
         check_compatibility=False,
+        verify=settings.QDRANT_VERIFY_SSL,
     )
 
 
@@ -118,54 +119,117 @@ class _LoggingRetriever(BaseRetriever):
         return docs
 
 
+def _get_cohere_client():
+    """Return a Cohere client for reranking. Raises if COHERE_API_KEY is absent."""
+    import cohere
+
+    if not settings.COHERE_API_KEY:
+        raise ValueError("COHERE_API_KEY is required for chat retrieval reranking")
+    return cohere.Client(api_key=settings.COHERE_API_KEY, base_url=settings.COHERE_API_URL)
+
+
 class _RoutingRetriever(BaseRetriever):
-    """Wraps the legal KB retriever with instrument-aware query enrichment.
+    """Semantic retrieval pipeline for the legal knowledge chat path.
 
-    Before each retrieval call the user query is routed through
-    ``instrument_router.route()`` which returns a ``RouteDecision``.  The
-    ``query_suffix`` from that decision is appended to the raw query string so
-    Qdrant's semantic search is anchored to the correct legal corpus (e.g.
-    "Commercial Code Proclamation 1243/2021" for company/director questions).
+    Each query goes through three stages:
+      1. Instrument router — reads ``expect_kb_gap`` and ``forbidden_primary``
+         boolean signals for the grounding verifier. The ``query_suffix`` is
+         intentionally ignored; it is no longer used to mutate the query.
+      2. LLM query expansion — ``expand_chat_query`` produces 2-3 semantically
+         diverse sub-queries. Combined with the original query, all are sent to
+         Qdrant and merged via RRF.
+      3. Cohere cross-encoder rerank — the merged candidate pool is reranked
+         against the *original* query (not any enriched variant) to produce the
+         final top-k results.
 
-    This wrapper also emits a structured log entry with ``route_decision`` so
-    operators can track which instrument was selected and whether a KB gap was
-    expected.
+    Fallback chain (each stage degrades gracefully):
+      - Expansion fails → single-query RRF path.
+      - RRF/search fails → ``self.retriever.invoke(query)`` (legacy dense path).
+      - Cohere key absent or rerank fails → top-k from RRF pass is returned.
     """
 
     retriever: BaseRetriever
 
     def _get_relevant_documents(self, query: str, *, run_manager=None) -> list[Document]:
         from app.services.legal.instrument_router import route
+        from app.services.drafting.knowledge_retrieval import (
+            expand_chat_query,
+            search_legal_knowledge,
+        )
 
+        # ── Stage 1: routing signals (grounding verifier metadata only) ──────
         decision = route(query)
-        enriched = query
-        if decision.query_suffix:
-            enriched = f"{query} {decision.query_suffix}"
-
         log.info(
             "routing_decision",
             extra={
                 "event": "instrument_route",
                 "original_query": query,
-                "enriched_query": enriched,
-                "query_suffix": decision.query_suffix,
                 "expect_kb_gap": decision.expect_kb_gap,
                 "forbidden_primary": decision.forbidden_primary,
             },
         )
 
-        docs = self.retriever.invoke(enriched)
+        # ── Stage 2: LLM query expansion + RRF ───────────────────────────────
+        sub_queries = expand_chat_query(query)
+        all_queries = [query] + sub_queries  # original always first
 
-        log.info(
-            "routing_retrieval_done",
-            extra={
-                "event": "instrument_route",
-                "phase": "results",
-                "doc_count": len(docs),
-                "expect_kb_gap": decision.expect_kb_gap,
-            },
-        )
-        return docs
+        try:
+            rrf_top_k = settings.RETRIEVAL_LEGAL_FETCH_K * len(all_queries)
+            candidates = search_legal_knowledge(
+                all_queries,
+                top_k_per_query=settings.RETRIEVAL_LEGAL_FETCH_K,
+                rrf_top_k=rrf_top_k,
+            )
+        except Exception as e:
+            log.warning(
+                "search_legal_knowledge failed, falling back to dense retriever",
+                extra={"event": "instrument_route", "error": str(e)},
+            )
+            # Dense fallback: skip rerank entirely and return results directly
+            return self.retriever.invoke(query)
+
+        if not candidates:
+            return candidates
+
+        # ── Stage 3: Cohere cross-encoder rerank ─────────────────────────────
+        top_k = settings.RETRIEVAL_LEGAL_RERANK_TOP_K
+        try:
+            cohere_client = _get_cohere_client()
+            documents = [doc.page_content for doc in candidates]
+            response = cohere_client.rerank(
+                model=settings.COHERE_RERANK_MODEL,
+                query=query,  # always the ORIGINAL query, never any enriched variant
+                documents=documents,
+                top_n=min(top_k, len(documents)),
+            )
+            reranked = [candidates[item.index] for item in response.results]
+            log.info(
+                "routing_retrieval_done",
+                extra={
+                    "event": "instrument_route",
+                    "phase": "reranked",
+                    "candidate_count": len(candidates),
+                    "result_count": len(reranked),
+                    "expect_kb_gap": decision.expect_kb_gap,
+                },
+            )
+            return reranked
+        except Exception as e:
+            log.warning(
+                "Cohere rerank failed, returning RRF top results",
+                extra={"event": "instrument_route", "error": str(e)},
+            )
+            result = candidates[:top_k]
+            log.info(
+                "routing_retrieval_done",
+                extra={
+                    "event": "instrument_route",
+                    "phase": "rrf_fallback",
+                    "result_count": len(result),
+                    "expect_kb_gap": decision.expect_kb_gap,
+                },
+            )
+            return result
 
 
 def get_document_blocks_by_doc_id(doc_id: str) -> list[dict]:

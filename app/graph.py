@@ -15,12 +15,13 @@ from langchain_core.messages import (
 )
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.config import get_stream_writer
+from langgraph.config import get_config, get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from app.config import settings
+from app.llm import build_chat_llm, resolve_model
 from app.logging_config import get_logger
 from app.retrieval import get_doc_blocks_retriever_tool, get_retriever_tool
 from app.services.legal.grounding import (
@@ -43,21 +44,16 @@ class AgentState(TypedDict):
     grounding: dict  # last GroundingResult fields: {ok, reason, repair_attempted}
 
 
-# Cached singletons — built once at first request, reused for every subsequent call
-@lru_cache(maxsize=1)
-def _llm() -> ChatOpenAI:
-    return ChatOpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=settings.OPENROUTER_API_KEY,
-        model=settings.GEMINI_MODEL,
-        temperature=0.1,
-        streaming=True,
-        # Disable Gemini's internal "thinking" phase — thinking models buffer the
-        # entire reasoning trace before emitting any tokens, which breaks SSE streaming.
-        # extra_body must be a top-level param (not inside model_kwargs) so langchain-openai
-        # passes it directly to the httpx request body.
-        extra_body={"reasoning": {"effort": "none"}},
-    )
+# Per-(model, enable_reasoning) LLM — delegates to shared factory in app.llm
+def _get_llm_for_config() -> ChatOpenAI:
+    """Return a ChatOpenAI instance appropriate for the current LangGraph config."""
+    try:
+        cfg = get_config().get("configurable", {})
+    except Exception:
+        cfg = {}
+    model = resolve_model(cfg.get("model"))
+    enable_reasoning = bool(cfg.get("enable_reasoning", False))
+    return build_chat_llm(model=model, enable_reasoning=enable_reasoning, streaming=True)
 
 
 @lru_cache(maxsize=1)
@@ -65,9 +61,9 @@ def _tool():
     return get_retriever_tool()
 
 
-@lru_cache(maxsize=1)
 def _llm_with_tools():
-    return _llm().bind_tools([_tool()])
+    """Return an LLM bound to the legal retriever tool for the current config."""
+    return _get_llm_for_config().bind_tools([_tool()])
 
 
 def _should_continue(state: dict) -> Literal["tools", "ground"]:
@@ -267,12 +263,25 @@ def _stream_llm_response_once(
 ) -> AIMessage:
     full_chunk: AIMessageChunk | None = None
     saw_stream_chunk = False
+    emitted_thinking_status = False
 
     for chunk in llm_with_tools.stream(messages_to_send):
         if not isinstance(chunk, AIMessageChunk):
             continue
         saw_stream_chunk = True
         full_chunk = chunk if full_chunk is None else full_chunk + chunk
+
+        # Forward reasoning/thinking tokens emitted before the answer starts.
+        # OpenRouter sends these in additional_kwargs["reasoning"] while content
+        # is still empty. We emit a one-time status so the client shows activity,
+        # then stream each thinking chunk so the frontend can display it.
+        reasoning_text = (chunk.additional_kwargs or {}).get("reasoning") or ""
+        if reasoning_text and writer is not None:
+            if not emitted_thinking_status:
+                emitted_thinking_status = True
+                writer({"type": "status", "message": "Reasoning…"})
+            writer({"type": "thinking", "content": reasoning_text})
+
         text = _chunk_to_text(chunk.content)
         if text and writer is not None:
             writer({"type": "token", "content": text})
@@ -564,7 +573,11 @@ def build_doc_graph(doc_id: str):
     Includes the grounding verifier so doc-agent answers are also citation-hardened.
     """
     doc_tool = get_doc_blocks_retriever_tool(doc_id)
-    llm_with_doc_tools = _llm().bind_tools([_tool(), doc_tool])
+    # Doc graph always uses the env-configured default model with reasoning off.
+    _default_llm = build_chat_llm(
+        model=resolve_model(None), enable_reasoning=False, streaming=True
+    )
+    llm_with_doc_tools = _default_llm.bind_tools([_tool(), doc_tool])
 
     def _node(state: dict) -> dict:
         messages = state["messages"]

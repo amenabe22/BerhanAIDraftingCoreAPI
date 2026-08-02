@@ -143,12 +143,14 @@ def test_get_qdrant_client_passes_url_and_api_key():
     ):
         mock_settings.QDRANT_URL = "https://qdrant.example.com"
         mock_settings.QDRANT_API_KEY = "qkey-123"
+        mock_settings.QDRANT_VERIFY_SSL = True
         MockClient.return_value = MagicMock()
         _get_qdrant_client()
         MockClient.assert_called_once_with(
             url="https://qdrant.example.com",
             api_key="qkey-123",
             check_compatibility=False,
+            verify=True,
         )
 
 
@@ -291,3 +293,270 @@ def test_get_retriever_tool_passes_correct_search_kwargs():
     mock_vector_store.as_retriever.assert_called_once_with(
         search_kwargs={"k": settings.RETRIEVAL_LEGAL_TOP_K}
     )
+
+
+# ---------------------------------------------------------------------------
+# expand_chat_query
+# ---------------------------------------------------------------------------
+
+
+def test_expand_chat_query_returns_list_of_strings():
+    """Mock LLM returns two sub-queries; function returns them as a list."""
+    from app.services.drafting.knowledge_retrieval import expand_chat_query
+
+    fake_response = MagicMock()
+    fake_response.content = (
+        "Ethiopian Civil Code contract formation elements offer acceptance\n"
+        "consent validity essential requirements Article 1675"
+    )
+
+    with patch(
+        "app.services.drafting.knowledge_retrieval._compliance_llm"
+    ) as mock_llm_factory:
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = fake_response
+        mock_llm_factory.return_value = mock_llm
+
+        result = expand_chat_query("steps to form a legal contract")
+
+    assert isinstance(result, list)
+    assert len(result) == 2
+    assert all(isinstance(q, str) and q for q in result)
+
+
+def test_expand_chat_query_fallback_on_llm_error():
+    """If the LLM raises, expand_chat_query returns an empty list."""
+    from app.services.drafting.knowledge_retrieval import expand_chat_query
+
+    with patch(
+        "app.services.drafting.knowledge_retrieval._compliance_llm"
+    ) as mock_llm_factory:
+        mock_llm = MagicMock()
+        mock_llm.invoke.side_effect = RuntimeError("LLM unavailable")
+        mock_llm_factory.return_value = mock_llm
+
+        result = expand_chat_query("what is negligence?")
+
+    assert result == []
+
+
+def test_expand_chat_query_empty_input_returns_empty():
+    """Empty / whitespace query skips the LLM call and returns []."""
+    from app.services.drafting.knowledge_retrieval import expand_chat_query
+
+    with patch(
+        "app.services.drafting.knowledge_retrieval._compliance_llm"
+    ) as mock_llm_factory:
+        result = expand_chat_query("   ")
+
+    mock_llm_factory.assert_not_called()
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _RoutingRetriever — semantic pipeline
+# ---------------------------------------------------------------------------
+
+
+def _make_docs(count: int) -> list[Document]:
+    return [
+        Document(
+            page_content=f"Article {1675 + i} text",
+            metadata={"document_id": "civil-code", "item_id": str(1675 + i), "title": ""},
+        )
+        for i in range(count)
+    ]
+
+
+class _MockRouteDecision:
+    def __init__(self, expect_kb_gap=False, forbidden_primary=None, query_suffix=""):
+        self.expect_kb_gap = expect_kb_gap
+        self.forbidden_primary = forbidden_primary
+        self.query_suffix = query_suffix
+
+
+def test_routing_retriever_uses_original_query_for_rerank():
+    """Cohere rerank must always receive the original (non-enriched) query."""
+    from app.retrieval import _RoutingRetriever
+
+    candidates = _make_docs(15)
+    mock_rerank_resp = MagicMock()
+    mock_rerank_resp.results = [MagicMock(index=i) for i in range(12)]
+    mock_cohere = MagicMock()
+    mock_cohere.rerank.return_value = mock_rerank_resp
+
+    fake_decision = _MockRouteDecision()
+
+    # Patch at the source modules so the local imports inside _get_relevant_documents
+    # pick up the mocks when the function re-executes the from-imports.
+    with (
+        patch("app.services.legal.instrument_router.route", return_value=fake_decision),
+        patch(
+            "app.services.drafting.knowledge_retrieval.expand_chat_query",
+            return_value=["query angle 1"],
+        ),
+        patch(
+            "app.services.drafting.knowledge_retrieval.search_legal_knowledge",
+            return_value=candidates,
+        ),
+        patch("app.retrieval._get_cohere_client", return_value=mock_cohere),
+        patch(
+            "app.retrieval.settings",
+            RETRIEVAL_LEGAL_FETCH_K=15,
+            RETRIEVAL_LEGAL_RERANK_TOP_K=12,
+            COHERE_RERANK_MODEL="rerank-multilingual-v3.0",
+            COHERE_API_KEY="test-key",
+        ),
+    ):
+        retriever = _RoutingRetriever(retriever=_StubRetriever())
+        retriever._get_relevant_documents("steps to form a legal contract")
+
+    # Verify the reranker was called with the ORIGINAL query
+    mock_cohere.rerank.assert_called_once()
+    call_kwargs = mock_cohere.rerank.call_args
+    assert call_kwargs.kwargs.get("query") == "steps to form a legal contract"
+
+
+def test_routing_retriever_fallback_no_cohere_key():
+    """When COHERE_API_KEY is absent the rerank step is skipped; RRF top results returned."""
+    from app.retrieval import _RoutingRetriever
+
+    candidates = _make_docs(20)
+    fake_decision = _MockRouteDecision()
+
+    with (
+        patch("app.services.legal.instrument_router.route", return_value=fake_decision),
+        patch(
+            "app.services.drafting.knowledge_retrieval.expand_chat_query",
+            return_value=["q2"],
+        ),
+        patch(
+            "app.services.drafting.knowledge_retrieval.search_legal_knowledge",
+            return_value=candidates,
+        ),
+        patch(
+            "app.retrieval._get_cohere_client",
+            side_effect=ValueError("COHERE_API_KEY is required"),
+        ),
+        patch(
+            "app.retrieval.settings",
+            RETRIEVAL_LEGAL_FETCH_K=15,
+            RETRIEVAL_LEGAL_RERANK_TOP_K=12,
+            COHERE_RERANK_MODEL="rerank-multilingual-v3.0",
+            COHERE_API_KEY="",
+        ),
+    ):
+        retriever = _RoutingRetriever(retriever=_StubRetriever())
+        result = retriever._get_relevant_documents("contract obligations")
+
+    # Should return the top-12 from the RRF candidates, not error
+    assert len(result) == 12
+    assert result == candidates[:12]
+
+
+def test_routing_retriever_fallback_rerank_error():
+    """If Cohere rerank raises, the retriever falls back to top-k RRF results."""
+    from app.retrieval import _RoutingRetriever
+
+    candidates = _make_docs(20)
+    fake_decision = _MockRouteDecision()
+    mock_cohere = MagicMock()
+    mock_cohere.rerank.side_effect = RuntimeError("Cohere service unavailable")
+
+    with (
+        patch("app.services.legal.instrument_router.route", return_value=fake_decision),
+        patch(
+            "app.services.drafting.knowledge_retrieval.expand_chat_query",
+            return_value=["q2"],
+        ),
+        patch(
+            "app.services.drafting.knowledge_retrieval.search_legal_knowledge",
+            return_value=candidates,
+        ),
+        patch("app.retrieval._get_cohere_client", return_value=mock_cohere),
+        patch(
+            "app.retrieval.settings",
+            RETRIEVAL_LEGAL_FETCH_K=15,
+            RETRIEVAL_LEGAL_RERANK_TOP_K=12,
+            COHERE_RERANK_MODEL="rerank-multilingual-v3.0",
+            COHERE_API_KEY="key",
+        ),
+    ):
+        retriever = _RoutingRetriever(retriever=_StubRetriever())
+        result = retriever._get_relevant_documents("inheritance")
+
+    assert len(result) == 12
+    assert result == candidates[:12]
+
+
+def test_routing_retriever_fallback_expansion_error():
+    """If expand_chat_query returns [], the original query alone is used for search."""
+    from app.retrieval import _RoutingRetriever
+
+    candidates = _make_docs(10)
+    mock_rerank_resp = MagicMock()
+    mock_rerank_resp.results = [MagicMock(index=i) for i in range(10)]
+    mock_cohere = MagicMock()
+    mock_cohere.rerank.return_value = mock_rerank_resp
+    fake_decision = _MockRouteDecision()
+
+    with (
+        patch("app.services.legal.instrument_router.route", return_value=fake_decision),
+        patch(
+            "app.services.drafting.knowledge_retrieval.expand_chat_query",
+            return_value=[],  # expansion returned nothing
+        ),
+        patch(
+            "app.services.drafting.knowledge_retrieval.search_legal_knowledge",
+            return_value=candidates,
+        ) as mock_search,
+        patch("app.retrieval._get_cohere_client", return_value=mock_cohere),
+        patch(
+            "app.retrieval.settings",
+            RETRIEVAL_LEGAL_FETCH_K=15,
+            RETRIEVAL_LEGAL_RERANK_TOP_K=12,
+            COHERE_RERANK_MODEL="rerank-multilingual-v3.0",
+            COHERE_API_KEY="key",
+        ),
+    ):
+        retriever = _RoutingRetriever(retriever=_StubRetriever())
+        retriever._get_relevant_documents("employment termination notice")
+
+    # search_legal_knowledge must have been called with only the original query
+    call_args = mock_search.call_args
+    queries_passed = call_args.args[0] if call_args.args else call_args.kwargs.get("queries", [])
+    assert queries_passed == ["employment termination notice"]
+
+
+def test_routing_retriever_fallback_search_error():
+    """If search_legal_knowledge raises, the legacy dense retriever is used as final fallback."""
+    from app.retrieval import _RoutingRetriever
+
+    legacy_docs = _make_docs(5)
+    stub = _StubRetriever(docs=legacy_docs)
+    fake_decision = _MockRouteDecision()
+
+    with (
+        patch("app.services.legal.instrument_router.route", return_value=fake_decision),
+        patch(
+            "app.services.drafting.knowledge_retrieval.expand_chat_query",
+            return_value=["q2"],
+        ),
+        patch(
+            "app.services.drafting.knowledge_retrieval.search_legal_knowledge",
+            side_effect=RuntimeError("Qdrant unreachable"),
+        ),
+        patch("app.retrieval._get_cohere_client", return_value=MagicMock()),
+        patch(
+            "app.retrieval.settings",
+            RETRIEVAL_LEGAL_FETCH_K=15,
+            RETRIEVAL_LEGAL_RERANK_TOP_K=12,
+            COHERE_RERANK_MODEL="rerank-multilingual-v3.0",
+            COHERE_API_KEY="key",
+        ),
+    ):
+        retriever = _RoutingRetriever(retriever=stub)
+        result = retriever._get_relevant_documents("property rights")
+
+    # Falls back to the stub retriever's docs
+    assert result == legacy_docs

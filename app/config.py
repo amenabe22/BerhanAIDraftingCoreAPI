@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # Qdrant (payload keys must match how the collection was indexed)
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None
+    QDRANT_VERIFY_SSL: bool = True  # set to false to skip TLS cert verification
     QDRANT_LEGAL_KNOWLEDGE_COLLECTION: str = "BerhanAIDocumentKnowledgeCited"
     QDRANT_DEFAULT_COLLECTION: str = "doc_blocks"  # user-uploaded doc blocks
     KNOWLEDGE_EMBEDDING_DIMENSION: int = 1024
@@ -34,6 +35,9 @@ class Settings(BaseSettings):
     # Retrieval – number of chunks returned per query (legal search/advice vs doc search)
     RETRIEVAL_LEGAL_TOP_K: int = 12
     RETRIEVAL_DOC_TOP_K: int = 10
+    # Chat-path legal retrieval: semantic pipeline (expand → RRF over-fetch → Cohere Rerank)
+    RETRIEVAL_LEGAL_FETCH_K: int = 15      # candidates per sub-query fetched from Qdrant
+    RETRIEVAL_LEGAL_RERANK_TOP_K: int = 12  # final results after Cohere cross-encoder rerank
 
     # Compliance analysis
     COMPLIANCE_ANALYSIS_MODEL: str | None = None  # default: GEMINI_MODEL

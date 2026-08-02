@@ -19,6 +19,7 @@ from app.graph import (
     get_doc_graph,
     get_graph,
 )
+from app.llm import SupportedModel, resolve_model
 from app.logging_config import get_logger, setup_logging
 
 setup_logging()
@@ -60,6 +61,11 @@ class ChatRequest(BaseModel):
     # Optional URL of any file/image supported by Gemini multimodal (JPEG, PNG,
     # GIF, WEBP, PDF, MP4, MP3, WAV, …). Null / omitted → text-only message.
     file_url: str | None = None
+    # Model selection — must be one of the supported OpenRouter model IDs.
+    # Omit to use the server default (GEMINI_MODEL env var).
+    model: SupportedModel | None = None
+    # Enable extended reasoning (effort=medium). Increases latency and cost.
+    enable_reasoning: bool = False
 
 
 class DocChatRequest(BaseModel):
@@ -209,6 +215,8 @@ async def _stream_endpoint(
 ) -> StreamingResponse:
     thread_id = request.thread_id or str(uuid.uuid4())
     file_url = (request.file_url or "").strip() or None
+    resolved_model = resolve_model(getattr(request, "model", None))
+    enable_reasoning = getattr(request, "enable_reasoning", False)
     log.info(
         event_type,
         extra={
@@ -216,6 +224,8 @@ async def _stream_endpoint(
             "user_message": request.message,
             "thread_id": thread_id,
             "has_file_url": bool(file_url),
+            "model": resolved_model,
+            "enable_reasoning": enable_reasoning,
         },
     )
 
@@ -234,8 +244,15 @@ async def _stream_endpoint(
 
     async def event_stream():
         yield f"data: {json.dumps({'type': 'thread_id', 'thread_id': thread_id})}\n\n"
+        yield f"data: {json.dumps({'type': 'model', 'model': resolved_model, 'enable_reasoning': enable_reasoning})}\n\n"
 
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {
+            "configurable": {
+                "thread_id": thread_id,
+                "model": resolved_model,
+                "enable_reasoning": enable_reasoning,
+            }
+        }
         inputs = {"messages": initial_messages}
         tool_msg_buffers: dict[str, str] = {}
         status_sent = False
@@ -279,6 +296,12 @@ async def _stream_endpoint(
                             if content:
                                 saw_custom_tokens = True
                                 yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                        elif ptype == "thinking":
+                            # Reasoning/thinking tokens from extended-reasoning models.
+                            # Forwarded as-is so the client can populate the thinking panel.
+                            content = payload.get("content", "")
+                            if content:
+                                yield f"data: {json.dumps({'type': 'thinking', 'content': content})}\n\n"
                         elif ptype == "status":
                             # Pass through status messages from grounding / repair
                             msg = payload.get("message", "")

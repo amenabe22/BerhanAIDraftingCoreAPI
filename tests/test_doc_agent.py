@@ -196,7 +196,7 @@ def test_build_doc_graph_returns_compiled_graph():
 
     with (
         patch("app.graph._tool", return_value=_mock_legal_tool()),
-        patch("app.graph._llm", return_value=MagicMock()),
+        patch("app.graph.build_chat_llm", return_value=MagicMock()),
         patch(
             "app.graph.get_doc_blocks_retriever_tool",
             return_value=MagicMock(name="search_user_documents"),
@@ -212,7 +212,7 @@ def test_build_doc_graph_has_agent_and_tools_nodes():
 
     with (
         patch("app.graph._tool", return_value=_mock_legal_tool()),
-        patch("app.graph._llm", return_value=MagicMock()),
+        patch("app.graph.build_chat_llm", return_value=MagicMock()),
         patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
         patch("app.graph.ToolNode"),
     ):
@@ -232,7 +232,7 @@ def test_get_doc_graph_returns_same_instance_for_same_doc_id():
         graph_module._doc_graphs.pop(doc_id, None)
         with (
             patch("app.graph._tool", return_value=_mock_legal_tool()),
-            patch("app.graph._llm", return_value=MagicMock()),
+            patch("app.graph.build_chat_llm", return_value=MagicMock()),
             patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
             patch("app.graph.ToolNode"),
         ):
@@ -253,7 +253,7 @@ def test_get_doc_graph_builds_separate_graphs_for_different_doc_ids():
         graph_module._doc_graphs.clear()
         with (
             patch("app.graph._tool", return_value=_mock_legal_tool()),
-            patch("app.graph._llm", return_value=MagicMock()),
+            patch("app.graph.build_chat_llm", return_value=MagicMock()),
             patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
             patch("app.graph.ToolNode"),
         ):

@@ -230,21 +230,37 @@ def test_compiled_graph_emits_multiple_custom_token_events():
 
 
 # ---------------------------------------------------------------------------
-# _llm, _tool, _llm_with_tools singletons
+# _get_llm_for_config, _tool, _llm_with_tools
 # ---------------------------------------------------------------------------
 
 
-def test_llm_singleton_returns_same_instance():
-    """_llm() should return the same cached object on repeated calls."""
-    from app.graph import _llm
+def test_get_llm_for_config_uses_default_when_no_config():
+    """_get_llm_for_config() uses env default and reasoning=off when no config present."""
+    from app.graph import _get_llm_for_config
+    from app.llm import build_chat_llm, resolve_model
 
-    with patch("app.graph.ChatOpenAI") as MockLLM:
-        MockLLM.return_value = MagicMock()
-        _llm.cache_clear()
-        a = _llm()
-        b = _llm()
-        assert a is b
-        _llm.cache_clear()
+    build_chat_llm.cache_clear()
+    mock_llm = MagicMock()
+    with patch("app.llm.ChatOpenAI", return_value=mock_llm):
+        with patch("app.graph.get_config", return_value={}):
+            result = _get_llm_for_config()
+    assert result is mock_llm
+    build_chat_llm.cache_clear()
+
+
+def test_get_llm_for_config_passes_model_and_reasoning():
+    """_get_llm_for_config() forwards model + enable_reasoning from LangGraph config."""
+    from app.graph import _get_llm_for_config
+    from app.llm import build_chat_llm
+
+    build_chat_llm.cache_clear()
+    mock_llm = MagicMock()
+    fake_config = {"configurable": {"model": "openai/gpt-4.1", "enable_reasoning": True}}
+    with patch("app.llm.ChatOpenAI", return_value=mock_llm):
+        with patch("app.graph.get_config", return_value=fake_config):
+            result = _get_llm_for_config()
+    assert result is mock_llm
+    build_chat_llm.cache_clear()
 
 
 def test_tool_singleton_returns_same_instance():
