@@ -231,6 +231,151 @@
     <div id="docCitations" class="citations" style="display:none;"></div>
   </section>
 
+  <!-- Structured Agent Doc-Gen -->
+  <section>
+    <h2>POST /drafting/generate</h2>
+    <p class="desc">Agent one-shot drafting: JSON body with nested <code>metadata</code> per <code>drafting_metadata.schema.json</code> (camelCase; required <code>title</code>, <code>parties</code>, <code>governingLaw</code>). Generates TipTap then auto-exports. Language: <code>en</code> | <code>am</code>.</p>
+    <label>Doc type <span style="color:#b91c1c">*</span></label>
+    <input type="text" id="sgDocType" value="NDA" placeholder="NDA, Contract, Employment Contract…" />
+    <label>Instructions (optional)</label>
+    <textarea id="sgInstructions">Draft under Ethiopian law. Keep it practical.</textarea>
+    <div class="lang-row">
+      <label for="sgLang">Language</label>
+      <select id="sgLang" class="lang-select">
+        <option value="en">English (en)</option>
+        <option value="am">Amharic – አማርኛ (am)</option>
+      </select>
+    </div>
+    <div class="lang-row">
+      <label for="sgModel">Model</label>
+      <select id="sgModel" class="lang-select">
+        <option value="">Server default</option>
+        <option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option>
+        <option value="google/gemini-2.5-pro">google/gemini-2.5-pro</option>
+        <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
+      </select>
+    </div>
+    <label for="sgMetadata">Metadata <span style="color:#94a3b8;font-weight:400">(JSON Schema camelCase — required: title, parties, governingLaw)</span></label>
+    <textarea id="sgMetadata" style="min-height:200px; font-family:ui-monospace,monospace; font-size:0.8rem;">
+{
+  "title": "Mutual Non-Disclosure Agreement",
+  "parties": [
+    { "name": "Acme PLC", "role": "Disclosing Party" },
+    { "name": "Beta LLC", "role": "Receiving Party" }
+  ],
+  "governingLaw": "Ethiopian law",
+  "jurisdiction": "Ethiopian courts",
+  "numPages": 2,
+  "purpose": "Protect confidential business information"
+}
+</textarea>
+    <label>Filename for export (optional)</label>
+    <input type="text" id="sgFilename" placeholder="nda-acme-beta" />
+    <div class="reasoning-row" style="margin-top:0.5rem;">
+      <input type="checkbox" id="sgPdf" checked />
+      <label for="sgPdf">PDF</label>
+      <input type="checkbox" id="sgDocx" checked style="margin-left:1rem;" />
+      <label for="sgDocx">DOCX</label>
+    </div>
+    <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+      <button type="button" id="sgBtn">Generate + export</button>
+    </div>
+    <label style="margin-top:0.75rem;">Request body preview</label>
+    <pre id="sgBodyPreview" class="result" style="max-height:160px; overflow:auto; margin-top:0.25rem;"></pre>
+    <div id="sgStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="sgStatusMsg"></span></div>
+    <div id="sgEvents" class="result" style="display:none; max-height:180px; overflow:auto;"></div>
+    <div id="sgAnswer" class="answer" style="display:none;"></div>
+    <div id="sgDoc" class="result" style="display:none; max-height:280px; overflow:auto;"></div>
+  </section>
+
+  <!-- Document Generation -->
+  <section>
+    <h2>POST /drafting/generate/stream</h2>
+    <p class="desc">Document generation (ported from main API). Streams analysis / clarification / TipTap JSON. Use <code>action=start</code>, then <code>message</code> for follow-ups, or <code>finalize</code> to force generate.</p>
+    <label>Message</label>
+    <textarea id="genMessage">Draft a simple 2-page NDA between Acme PLC and Beta LLC under Ethiopian law. Keep it simple and just generate it.</textarea>
+    <label>File / Image URL <span style="color:#94a3b8;font-weight:400;font-size:0.75rem">optional — PDF or image URL for multimodal context</span></label>
+    <input type="url" id="genFileUrl" placeholder="https://example.com/brief.pdf" />
+    <div class="lang-row">
+      <label for="genLang">Document language</label>
+      <select id="genLang" class="lang-select">
+        <option value="en">English</option>
+        <option value="am">Amharic – አማርኛ</option>
+        <option value="om">Oromo – Afaan Oromoo</option>
+      </select>
+    </div>
+    <div class="lang-row">
+      <label for="genModel">Model</label>
+      <select id="genModel" class="lang-select">
+        <option value="">Server default (gemini-2.5-flash)</option>
+        <option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option>
+        <option value="google/gemini-2.5-pro">google/gemini-2.5-pro</option>
+        <option value="anthropic/claude-sonnet-4">anthropic/claude-sonnet-4</option>
+        <option value="openai/gpt-4.1">openai/gpt-4.1</option>
+        <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
+      </select>
+    </div>
+    <div class="lang-row">
+      <label for="genAction">Action</label>
+      <select id="genAction" class="lang-select">
+        <option value="start">start</option>
+        <option value="message">message (follow-up)</option>
+        <option value="finalize">finalize (force generate)</option>
+      </select>
+    </div>
+    <label>Num pages (optional)</label>
+    <input type="number" id="genPages" min="1" max="20" placeholder="e.g. 2" />
+    <div class="reasoning-row">
+      <input type="checkbox" id="genReasoning" />
+      <label for="genReasoning">Enable extended reasoning</label>
+    </div>
+    <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center; flex-wrap:wrap;">
+      <button type="button" id="genBtn">Send</button>
+      <button type="button" id="genNewBtn" class="secondary">New conversation</button>
+    </div>
+    <div id="genModelBadge" style="display:none;"></div>
+    <div id="genThreadBar" class="thread-bar" style="display:none;">
+      <span class="label">Conversation ID</span>
+      <span class="tid" id="genThreadId"></span>
+      <button type="button" class="secondary" onclick="copyThreadId('genThreadId')">Copy</button>
+    </div>
+    <div id="genStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="genStatusMsg"></span></div>
+    <div id="genEvents" class="result" style="display:none; max-height:220px; overflow:auto;"></div>
+    <div id="genAnswer" class="answer" style="display:none;"></div>
+    <div id="genDocActions" style="display:none; margin-top:0.5rem; gap:0.5rem; align-items:center;">
+      <button type="button" id="genDownloadBtn" class="secondary">Download TipTap JSON</button>
+      <span style="font-size:0.75rem;color:#64748b;">Final doc is in the <code>document_generated</code> SSE event (below).</span>
+    </div>
+    <div id="genDocPreview" class="answer" style="display:none;"></div>
+    <div id="genDoc" class="result" style="display:none; max-height:360px; overflow:auto;"></div>
+  </section>
+
+  <!-- Export TipTap → Contabo PDF/DOCX -->
+  <section>
+    <h2>POST /drafting/export</h2>
+    <p class="desc">Convert TipTap JSON to PDF and/or DOCX, upload to Contabo Object Storage, return downloadable URLs. Uses the last generated document when available, or paste TipTap JSON below.</p>
+    <div class="reasoning-row">
+      <input type="checkbox" id="exportUseLast" checked />
+      <label for="exportUseLast">Use last generated TipTap doc (<code>window.__lastGeneratedDoc</code>)</label>
+    </div>
+    <label>TipTap JSON (used when checkbox is off, or as fallback)</label>
+    <textarea id="exportJson" placeholder='{"type":"doc","content":[...]}' style="min-height:120px; font-family:monospace; font-size:0.8rem;"></textarea>
+    <label>Filename (optional, no extension)</label>
+    <input type="text" id="exportFilename" placeholder="nda-acme-beta" />
+    <div class="reasoning-row" style="margin-top:0.5rem;">
+      <input type="checkbox" id="exportPdf" checked />
+      <label for="exportPdf">PDF</label>
+      <input type="checkbox" id="exportDocx" checked style="margin-left:1rem;" />
+      <label for="exportDocx">DOCX</label>
+    </div>
+    <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
+      <button type="button" id="exportBtn">Export to Contabo</button>
+      <button type="button" id="exportFillLastBtn" class="secondary">Fill textarea from last gen</button>
+    </div>
+    <div id="exportStatusBar" class="status-bar" style="display:none;"><div class="spinner"></div><span id="exportStatusMsg">Exporting…</span></div>
+    <div id="exportResult" class="answer" style="display:none;"></div>
+  </section>
+
   <!-- Compliance Analysis -->
   <section>
     <h2>POST /drafting/compliance/analyze-stream</h2>
@@ -268,7 +413,7 @@
     marked.setOptions({ gfm: true, breaks: true });
 
     // Persisted thread IDs — null means start a new conversation on next send
-    const state = { search: null, agent: null, doc: null };
+    const state = { search: null, agent: null, doc: null, gen: null };
 
     const baseUrl = () => document.getElementById('baseUrl').value.replace(/\/$/, '');
 
@@ -534,6 +679,416 @@
         'docStatusBar', 'docStatusMsg',
         null, null,
         { doc_id: docId, ...langExtra('docLang') });
+    });
+
+    document.getElementById('genNewBtn').addEventListener('click', () => {
+      state.gen = null;
+      window.__lastGeneratedDoc = null;
+      setThreadBar('genThreadBar', 'genThreadId', null);
+      document.getElementById('genAnswer').style.display = 'none';
+      document.getElementById('genDoc').style.display = 'none';
+      document.getElementById('genDocPreview').style.display = 'none';
+      document.getElementById('genDocActions').style.display = 'none';
+      document.getElementById('genEvents').style.display = 'none';
+      document.getElementById('genStatusBar').style.display = 'none';
+      document.getElementById('genModelBadge').style.display = 'none';
+    });
+
+    function extractTipTapText(node) {
+      if (!node || typeof node !== 'object') return '';
+      if (node.type === 'text') return node.text || '';
+      const kids = Array.isArray(node.content) ? node.content : [];
+      const joined = kids.map(extractTipTapText).join('');
+      if (node.type === 'paragraph' || node.type === 'heading' || node.type === 'listItem') {
+        return joined + '\n\n';
+      }
+      if (node.type === 'pageBreak') return '\n---\n\n';
+      return joined;
+    }
+
+    document.getElementById('genDownloadBtn').addEventListener('click', () => {
+      const doc = window.__lastGeneratedDoc;
+      if (!doc) return;
+      const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'generated-document.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    document.getElementById('genBtn').addEventListener('click', async () => {
+      const message = document.getElementById('genMessage').value.trim();
+      if (!message) return;
+      const btn = document.getElementById('genBtn');
+      const answerEl = document.getElementById('genAnswer');
+      const docEl = document.getElementById('genDoc');
+      const eventsEl = document.getElementById('genEvents');
+      const statusBar = document.getElementById('genStatusBar');
+      const statusMsg = document.getElementById('genStatusMsg');
+      const badge = document.getElementById('genModelBadge');
+      const fileUrl = document.getElementById('genFileUrl').value.trim();
+      const pagesRaw = document.getElementById('genPages').value.trim();
+      const action = document.getElementById('genAction').value;
+
+      btn.disabled = true;
+      answerEl.style.display = 'block';
+      answerEl.innerHTML = '';
+      docEl.style.display = 'none';
+      docEl.textContent = '';
+      eventsEl.style.display = 'block';
+      eventsEl.textContent = '';
+      eventsEl.className = 'result';
+      statusBar.style.display = 'flex';
+      statusMsg.textContent = 'Connecting…';
+      badge.style.display = 'none';
+
+      const body = {
+        message,
+        action,
+        ...langExtra('genLang'),
+        ...modelExtra('genModel', 'genReasoning'),
+        ...(fileUrl ? { file_url: fileUrl } : {}),
+        ...(pagesRaw ? { num_pages: Number(pagesRaw) } : {}),
+        ...(state.gen ? { thread_id: state.gen } : {}),
+      };
+
+      try {
+        const r = await fetch(baseUrl() + '/drafting/generate/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: JSON.stringify(body),
+        });
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (!r.ok || ct.indexOf('text/event-stream') === -1) {
+          statusBar.style.display = 'none';
+          let err = r.status + ' ' + r.statusText;
+          try {
+            const b = await r.json();
+            if (b.detail) err = typeof b.detail === 'string' ? b.detail : JSON.stringify(b.detail);
+          } catch (_) {}
+          answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + String(err).replace(/</g, '&lt;') + '</span>';
+          btn.disabled = false;
+          return;
+        }
+
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let eventLines = [];
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() || '';
+          for (const chunk of chunks) {
+            const dataLine = chunk.split('\n').find(function (l) { return l.startsWith('data: '); });
+            if (!dataLine) continue;
+            try {
+              const data = JSON.parse(dataLine.slice(6));
+              eventLines.push(data.type + (data.message ? (': ' + data.message) : ''));
+              if (eventLines.length > 80) eventLines = eventLines.slice(-80);
+              eventsEl.textContent = eventLines.join('\n');
+
+              if (data.type === 'thread_id' && data.thread_id) {
+                state.gen = data.thread_id;
+                setThreadBar('genThreadBar', 'genThreadId', data.thread_id);
+              } else if (data.type === 'model') {
+                badge.style.display = 'inline-flex';
+                badge.className = 'model-badge';
+                badge.textContent = data.model + (data.enable_reasoning ? ' · reasoning' : '');
+              } else if (data.type === 'status' || data.type === 'analyzing' || data.type === 'generation_progress') {
+                statusBar.style.display = 'flex';
+                statusMsg.textContent = data.message || data.stage || data.type;
+              } else if (data.type === 'clarification_needed') {
+                statusBar.style.display = 'none';
+                const qs = (data.questions || []).map(function (q) { return '<li>' + String(q).replace(/</g, '&lt;') + '</li>'; }).join('');
+                answerEl.innerHTML =
+                  '<p><strong>Clarification needed</strong></p>' +
+                  '<p>' + String(data.response_message || '').replace(/</g, '&lt;') + '</p>' +
+                  (qs ? '<ul>' + qs + '</ul>' : '') +
+                  '<p style="color:#64748b;font-size:0.8rem">Reply with action=message (same thread), or action=finalize to force generate.</p>';
+                document.getElementById('genAction').value = 'message';
+              } else if (data.type === 'ready_to_generate') {
+                statusMsg.textContent = data.response_message || 'Ready to generate…';
+              } else if (data.type === 'document_generated') {
+                statusBar.style.display = 'none';
+                window.__lastGeneratedDoc = data.document || null;
+                answerEl.innerHTML = '<p><strong>Document generated</strong> — scroll down for preview + raw TipTap JSON.</p>' +
+                  (data.metadata ? '<pre style="white-space:pre-wrap">' + JSON.stringify(data.metadata, null, 2).replace(/</g, '&lt;') + '</pre>' : '');
+                const previewEl = document.getElementById('genDocPreview');
+                const actionsEl = document.getElementById('genDocActions');
+                previewEl.style.display = 'block';
+                previewEl.innerHTML = '<h3 style="margin:0 0 0.5rem 0;font-size:0.9rem;">Readable preview</h3><pre style="white-space:pre-wrap;margin:0;font-family:inherit;font-size:0.9rem;">' +
+                  extractTipTapText(data.document || {}).replace(/</g, '&lt;') + '</pre>';
+                actionsEl.style.display = 'flex';
+                docEl.style.display = 'block';
+                docEl.textContent = JSON.stringify(data.document, null, 2);
+              } else if (data.type === 'error') {
+                statusBar.style.display = 'none';
+                answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + String(data.message || 'Unknown').replace(/</g, '&lt;') + '</span>';
+              }
+            } catch (_) {}
+          }
+        }
+        statusBar.style.display = 'none';
+      } catch (e) {
+        statusBar.style.display = 'none';
+        answerEl.style.display = 'block';
+        answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + e.message.replace(/</g, '&lt;') + '</span>';
+      }
+      btn.disabled = false;
+    });
+
+    document.getElementById('exportFillLastBtn').addEventListener('click', () => {
+      if (!window.__lastGeneratedDoc) {
+        alert('No generated document yet. Run Document Generation first.');
+        return;
+      }
+      document.getElementById('exportJson').value = JSON.stringify(window.__lastGeneratedDoc, null, 2);
+      document.getElementById('exportUseLast').checked = true;
+    });
+
+    function buildStructuredBody() {
+      const docType = document.getElementById('sgDocType').value.trim();
+      const wantPdf = document.getElementById('sgPdf').checked;
+      const wantDocx = document.getElementById('sgDocx').checked;
+      const formats = [];
+      if (wantPdf) formats.push('pdf');
+      if (wantDocx) formats.push('docx');
+
+      let metadata = null;
+      const metaRaw = document.getElementById('sgMetadata').value.trim();
+      if (metaRaw) {
+        metadata = JSON.parse(metaRaw);
+        if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) {
+          throw new Error('metadata must be a JSON object');
+        }
+      }
+
+      const body = {
+        doc_type: docType,
+        type: formats,
+        language: document.getElementById('sgLang').value || 'en',
+        instructions: document.getElementById('sgInstructions').value.trim() || null,
+        metadata: metadata,
+      };
+      const model = document.getElementById('sgModel').value;
+      if (model) body.model = model;
+      const filename = document.getElementById('sgFilename').value.trim();
+      if (filename) body.filename = filename;
+      return body;
+    }
+
+    function refreshSgPreview() {
+      const el = document.getElementById('sgBodyPreview');
+      if (!el) return;
+      try {
+        const body = buildStructuredBody();
+        el.textContent = JSON.stringify(body, null, 2);
+        el.classList.remove('error');
+      } catch (e) {
+        el.textContent = 'Invalid metadata JSON: ' + e.message;
+        el.classList.add('error');
+      }
+    }
+
+    ['sgDocType', 'sgInstructions', 'sgLang', 'sgModel', 'sgMetadata', 'sgFilename', 'sgPdf', 'sgDocx'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', refreshSgPreview);
+      el.addEventListener('change', refreshSgPreview);
+    });
+    refreshSgPreview();
+
+    document.getElementById('sgBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('sgBtn');
+      const statusBar = document.getElementById('sgStatusBar');
+      const statusMsg = document.getElementById('sgStatusMsg');
+      const eventsEl = document.getElementById('sgEvents');
+      const answerEl = document.getElementById('sgAnswer');
+      const docEl = document.getElementById('sgDoc');
+
+      let body;
+      try {
+        body = buildStructuredBody();
+      } catch (e) {
+        answerEl.style.display = 'block';
+        answerEl.innerHTML = '<span style="color:#b91c1c">Invalid metadata JSON: ' + String(e.message).replace(/</g, '&lt;') + '</span>';
+        return;
+      }
+      if (!body.doc_type) {
+        answerEl.style.display = 'block';
+        answerEl.innerHTML = '<span style="color:#b91c1c">doc_type is required.</span>';
+        return;
+      }
+      if (!body.type.length) {
+        answerEl.style.display = 'block';
+        answerEl.innerHTML = '<span style="color:#b91c1c">Select at least one of PDF or DOCX.</span>';
+        return;
+      }
+
+      refreshSgPreview();
+      btn.disabled = true;
+      statusBar.style.display = 'flex';
+      statusMsg.textContent = 'Starting…';
+      eventsEl.style.display = 'block';
+      eventsEl.textContent = '';
+      answerEl.style.display = 'block';
+      answerEl.innerHTML = '';
+      docEl.style.display = 'none';
+      docEl.textContent = '';
+
+      try {
+        const r = await fetch(baseUrl() + '/drafting/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: JSON.stringify(body),
+        });
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (!r.ok || ct.indexOf('text/event-stream') === -1) {
+          statusBar.style.display = 'none';
+          let err = r.status + ' ' + r.statusText;
+          try {
+            const b = await r.json();
+            if (b.detail) err = typeof b.detail === 'string' ? b.detail : JSON.stringify(b.detail);
+          } catch (_) {}
+          answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + String(err).replace(/</g, '&lt;') + '</span>';
+          btn.disabled = false;
+          return;
+        }
+
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let lines = [];
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() || '';
+          for (const chunk of chunks) {
+            const dataLine = chunk.split('\n').find(function (l) { return l.startsWith('data: '); });
+            if (!dataLine) continue;
+            try {
+              const data = JSON.parse(dataLine.slice(6));
+              lines.push(data.type + (data.message ? (': ' + data.message) : ''));
+              if (lines.length > 60) lines = lines.slice(-60);
+              eventsEl.textContent = lines.join('\n');
+
+              if (data.type === 'status' || data.type === 'generation_progress') {
+                statusBar.style.display = 'flex';
+                statusMsg.textContent = data.message || data.stage || data.type;
+              } else if (data.type === 'document_generated') {
+                window.__lastGeneratedDoc = data.document || null;
+                answerEl.innerHTML = '<p><strong>Document generated</strong></p>';
+                docEl.style.display = 'block';
+                docEl.textContent = JSON.stringify(data.document, null, 2);
+              } else if (data.type === 'export_ready') {
+                statusBar.style.display = 'none';
+                const links = [];
+                if (data.pdf_url) links.push('<a href="' + data.pdf_url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">PDF</a>');
+                if (data.docx_url) links.push('<a href="' + data.docx_url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">DOCX</a>');
+                answerEl.innerHTML += '<p><strong>Export ready</strong> ' + links.join(' · ') + '</p>' +
+                  '<pre style="white-space:pre-wrap;font-size:0.75rem;">' + JSON.stringify(data, null, 2).replace(/</g, '&lt;') + '</pre>';
+              } else if (data.type === 'export_skipped') {
+                statusBar.style.display = 'none';
+                answerEl.innerHTML += '<p style="color:#b45309"><strong>Export skipped:</strong> ' + String(data.message || '').replace(/</g, '&lt;') + '</p>';
+              } else if (data.type === 'error') {
+                statusBar.style.display = 'none';
+                answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + String(data.message || '').replace(/</g, '&lt;') + '</span>';
+              } else if (data.type === 'clarification_needed') {
+                answerEl.innerHTML += '<p style="color:#b91c1c">Unexpected clarification on structured API.</p>';
+              }
+            } catch (_) {}
+          }
+        }
+        statusBar.style.display = 'none';
+      } catch (e) {
+        statusBar.style.display = 'none';
+        answerEl.innerHTML = '<span style="color:#b91c1c">Error: ' + e.message.replace(/</g, '&lt;') + '</span>';
+      }
+      btn.disabled = false;
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('exportBtn');
+      const statusBar = document.getElementById('exportStatusBar');
+      const statusMsg = document.getElementById('exportStatusMsg');
+      const resultEl = document.getElementById('exportResult');
+      const useLast = document.getElementById('exportUseLast').checked;
+      const wantPdf = document.getElementById('exportPdf').checked;
+      const wantDocx = document.getElementById('exportDocx').checked;
+      const filename = document.getElementById('exportFilename').value.trim();
+
+      if (!wantPdf && !wantDocx) {
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = '<span style="color:#b91c1c">Select at least one format (PDF or DOCX).</span>';
+        return;
+      }
+
+      let documentJson = null;
+      if (useLast && window.__lastGeneratedDoc) {
+        documentJson = window.__lastGeneratedDoc;
+      } else {
+        const raw = document.getElementById('exportJson').value.trim();
+        if (!raw) {
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = '<span style="color:#b91c1c">Paste TipTap JSON or generate a document first.</span>';
+          return;
+        }
+        try {
+          documentJson = JSON.parse(raw);
+        } catch (e) {
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = '<span style="color:#b91c1c">Invalid JSON: ' + e.message.replace(/</g, '&lt;') + '</span>';
+          return;
+        }
+      }
+
+      const formats = [];
+      if (wantPdf) formats.push('pdf');
+      if (wantDocx) formats.push('docx');
+
+      btn.disabled = true;
+      statusBar.style.display = 'flex';
+      statusMsg.textContent = 'Converting and uploading to Contabo…';
+      resultEl.style.display = 'none';
+      resultEl.innerHTML = '';
+
+      try {
+        const body = { document: documentJson, formats };
+        if (filename) body.filename = filename;
+        const r = await fetch(baseUrl() + '/drafting/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json().catch(() => ({}));
+        statusBar.style.display = 'none';
+        resultEl.style.display = 'block';
+        if (!r.ok) {
+          const detail = data.detail || data.message || (r.status + ' ' + r.statusText);
+          resultEl.innerHTML = '<span style="color:#b91c1c">Error: ' + String(detail).replace(/</g, '&lt;') + '</span>';
+        } else {
+          const links = [];
+          if (data.pdf_url) links.push('<p><strong>PDF:</strong> <a href="' + data.pdf_url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">Open PDF</a></p>');
+          if (data.docx_url) links.push('<p><strong>DOCX:</strong> <a href="' + data.docx_url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">Open DOCX</a></p>');
+          resultEl.innerHTML =
+            '<p><strong>Exported</strong> as <code>' + String(data.filename || '').replace(/</g, '&lt;') + '</code></p>' +
+            links.join('') +
+            '<pre style="white-space:pre-wrap;font-size:0.75rem;margin-top:0.5rem;">' +
+            JSON.stringify(data, null, 2).replace(/</g, '&lt;') + '</pre>';
+        }
+      } catch (e) {
+        statusBar.style.display = 'none';
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = '<span style="color:#b91c1c">Error: ' + e.message.replace(/</g, '&lt;') + '</span>';
+      }
+      btn.disabled = false;
     });
 
     function renderComplianceResult(containerEl, data) {

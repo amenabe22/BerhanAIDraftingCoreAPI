@@ -71,10 +71,50 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     COMPLIANCE_CACHE_TTL: int = 604_800  # 7 days
 
-    @field_validator("QDRANT_API_KEY", "COHERE_API_KEY", mode="before")
+    # Document generation (ported from main API drafting)
+    MIN_PAGES: int = 4
+    MAX_PAGES: int = 6
+    MIN_WORDS_PER_PAGE: int = 500
+    DRAFTING_LLM_TIMEOUT: int = 120
+    DRAFTING_KNOWLEDGE_TIMEOUT: int = 10
+    ENABLE_GENERATION_RAG: bool = True
+    GENERATION_KNOWLEDGE_TOP_K: int = 3
+    ENABLE_CONTENT_EXPANSION: bool = False
+
+    # Contabo Object Storage (S3-compatible) for PDF/DOCX export
+    S3_ENDPOINT_URL: str = ""
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_BUCKET_NAME: str = ""
+    S3_REGION: str = "default"
+    S3_PUBLIC_BASE_URL: str | None = None  # if set, public URLs; else presigned GET
+    S3_PRESIGN_EXPIRY_SECONDS: int = 604_800  # 7 days
+
+    @field_validator(
+        "QDRANT_API_KEY",
+        "COHERE_API_KEY",
+        "S3_PUBLIC_BASE_URL",
+        mode="before",
+    )
     @classmethod
-    def strip_api_key_comment(cls, v: str | None) -> str | None:
+    def strip_optional_secret_comment(cls, v: str | None) -> str | None:
         return _strip_comment(v)
+
+    @field_validator(
+        "S3_ACCESS_KEY_ID",
+        "S3_SECRET_ACCESS_KEY",
+        "S3_ENDPOINT_URL",
+        "S3_BUCKET_NAME",
+        mode="before",
+    )
+    @classmethod
+    def strip_s3_string_comment(cls, v: str | None) -> str:
+        if v is None:
+            return ""
+        if not isinstance(v, str):
+            return str(v)
+        return v.split("#")[0].strip()
+
 
 
 settings = Settings()

@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 from app.api.v1.endpoints.drafting.compliance import router as compliance_router
 from app.api.v1.endpoints.drafting.edit import router as edit_router
+from app.api.v1.endpoints.drafting.export import router as export_router
+from app.api.v1.endpoints.drafting.generate import router as generate_router
 from app.graph import (
     DOC_CONSULTANT_SYSTEM,
     LEGAL_ADVISOR_SYSTEM,
@@ -92,6 +94,8 @@ app.add_middleware(
 
 app.include_router(compliance_router, prefix="/drafting")
 app.include_router(edit_router, prefix="/drafting")
+app.include_router(generate_router, prefix="/drafting")
+app.include_router(export_router, prefix="/drafting")
 
 _TEST_CLIENT_PATH = Path(__file__).resolve().parent.parent / "test_client.html"
 

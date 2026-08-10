@@ -10,6 +10,9 @@ pydantic-settings
 jsonschema
 cohere
 redis
+boto3
+reportlab
+python-docx
 
 # Dev / testing
 pytest
