@@ -1,0 +1,8 @@
+# Tunnel-only config. Authtoken comes from the user ngrok config
+# (~/Library/Application Support/ngrok/ngrok.yml). Do not put secrets here.
+version: "2"
+tunnels:
+  docgen-mcp:
+    proto: http
+    addr: 8765
+    inspect: true
