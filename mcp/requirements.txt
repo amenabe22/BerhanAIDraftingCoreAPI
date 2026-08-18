@@ -1,0 +1,4 @@
+fastmcp>=2.3
+httpx>=0.27
+openai>=1.0
+python-dotenv>=1.0
