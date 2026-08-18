@@ -50,6 +50,59 @@ services:
       - berhan-net
       - proxy-net          # shared with the nginx/certbot stack
 
+  # ── DocGen MCP (calls CoreAPI over berhan-net) ───────────────────────────────
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: mcp
+    image: berhan-docgen-mcp:latest
+    container_name: berhan-mcp
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+    # Host 8765 for local checks; production should TLS-terminate via nginx on proxy-net
+    ports:
+      - "8765:8765"
+
+    env_file:
+      - .env
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8765
+      - DOCGEN_API_URL=http://api:8000
+
+    healthcheck:
+      test: ["CMD", "python", "mcp/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+    networks:
+      - berhan-net
+      - proxy-net
+
 networks:
   berhan-net:
     driver: bridge

@@ -1,0 +1,3623 @@
+{
+  "cause_counts": {
+    "option_mismatch": 127,
+    "wrong_instrument": 1,
+    "batch_retrieval": 44,
+    "kb_gap_real": 6,
+    "key_in_prompt": 1,
+    "prompt_conflict": 130,
+    "alignment_noise": 52
+  },
+  "mismatches": [
+    {
+      "exam_id": "assosa-2015",
+      "q": 1,
+      "gold": "C",
+      "berhan": "A. Object, form, consent and capacity",
+      "stem": "Under Ethiopian law of contracts, the validity of any contract necessarily demands the cumulative presence of;",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Stem asks essential validity elements; sheet C is consent+capacity+object. Berhan picked A (includes form). Form is only required when the law prescribes it — classic EXCEPT/best-of-four miss."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 2,
+      "gold": "C",
+      "berhan": "In principle, courts are not allowed to vary a contract between the parties.",
+      "stem": "Which of the following is WRONG about variation of contracts under Ethiopian law of contract? ______",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Stem asks which statement is WRONG about variation. Berhan restated the true principle (courts may not vary). The marked choice is the false statement about variation whenever performance is impossible."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 5,
+      "gold": "E",
+      "berhan": "The remedy of damages does not necessarily require fault to establish the debtors’ liability.",
+      "stem": "Among the following, one is incorrect about damages under the Ethiopian Contracts law; _______",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Stem asks the incorrect statement about damages. Berhan picked a true proposition (fault not always required) instead of the marked force-majeure exemption option."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 6,
+      "gold": "B",
+      "berhan": "Counter guarantor disfavors the creditor than secondary one.",
+      "stem": "Of the following, one is true about secondary and counter guarantors under the Ethiopian contract law EXCEPT?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Counter-guarantor vs secondary guarantor. Berhan picked a distractor about who disfavors the creditor; the marked choice is a different comparison."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 7,
+      "gold": "B",
+      "berhan": "The creditor always has the burden of proving that the apparent act is a simulation to challenge debtor’s transaction.",
+      "stem": "All statements are true except the one about protection of creditors under the Ethiopian contract law.",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Creditor-protection / simulation. Berhan picked the burden-of-proof distractor rather than the marked statement about provisions favoring the creditor."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 11,
+      "gold": "Currently companies may issue shares either in registered or bearer form.",
+      "berhan": "Agency relationship between partners.",
+      "stem": "Currently companies may issue shares either in registered or bearer form.",
+      "kb_miss": false,
+      "cause": "wrong_instrument",
+      "why": "Company characteristics EXCEPT. Berhan answered from Civil Code association ideas (agency) instead of Commercial Code company features."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 21,
+      "gold": "J",
+      "berhan": "The weight of the interest of the public and the interest of the owner of the property to be expropriated.",
+      "stem": "According to the federal revised family code, which of the following is false about ascertainment of paternity?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 24,
+      "gold": "B",
+      "berhan": "A legally interdicted person is incapacitated.",
+      "stem": "Which one of the following statements absolutely true about the succession",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 25,
+      "gold": "B",
+      "berhan": "All",
+      "stem": "Which one of the following is not true about disinheritance under Ethiopian succession law",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key. EXCEPT/WRONG stem."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 26,
+      "gold": "E",
+      "berhan": "All rights and duties left behind the deceased",
+      "stem": "Which of the following is different among the given alternatives?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 27,
+      "gold": "D",
+      "berhan": "All",
+      "stem": "Which one is not true about extra contractual liability law?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key. EXCEPT/WRONG stem."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 28,
+      "gold": "A",
+      "berhan": "It becomes effective after the death of the person.",
+      "stem": "Which of the following statements is correct among the given alternatives?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 29,
+      "gold": "B",
+      "berhan": "A testator can disinherit his/her ascendants freely.",
+      "stem": "Which one is ordinary modes of compensation for moral damage",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key. EXCEPT/WRONG stem."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 30,
+      "gold": "",
+      "berhan": "A. Product liability.",
+      "stem": "All are correct about the basic principles of criminal law except?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 32,
+      "gold": "C",
+      "berhan": "Fault of the victim totally exempts the tort-feaser or at least reduces the extent of liability that the latter owes to ",
+      "stem": "Which one of the following choices is wrong about material element (actus-reus) of a crime?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key. EXCEPT/WRONG stem."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 33,
+      "gold": "D",
+      "berhan": "Pecuniary modes of compensation",
+      "stem": "All are correct regarding ‘Pardon’ and ‘Amnesty’ except?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key. EXCEPT/WRONG stem."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 34,
+      "gold": "",
+      "berhan": "All.",
+      "stem": "One of the following is odd among the given alternatives",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 35,
+      "gold": "",
+      "berhan": "The equality principle implies equality of treatment although they are not in equal circumstances.",
+      "stem": "One of the following categories of individuals is absolutely free from the provisions of the criminal law of Ethiopia. Who are they?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 36,
+      "gold": "C",
+      "berhan": "Crimes committed by members of the Ethiopian defense forces against the ‘ordinary law’ of a foreign country.",
+      "stem": "Which of the following is incorrect about preparatory acts under the FDRE criminal code?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key. EXCEPT/WRONG stem."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 37,
+      "gold": "D",
+      "berhan": "The existence of bad thought to violate criminal law by itself is sufficient to punish a person although not manifested.",
+      "stem": "Identify the one which doesn’t fall under the category of indirect taxes.",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 38,
+      "gold": "",
+      "berhan": "‘Amnesty’ necessarily applies after conviction.",
+      "stem": "One of the following is not the purpose of modern taxation. Which one?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 39,
+      "gold": "",
+      "berhan": "Material criminal.",
+      "stem": "Which of the following could result in either an administrative or criminal sanction under the current VAT Proclamation of Ethiopia?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 40,
+      "gold": "",
+      "berhan": "The system of absorption.",
+      "stem": "Which one of the following is NOT true about allocation of Powers of Public Revenues under the federal democratic republic of Ethiopian constitution?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 41,
+      "gold": "D",
+      "berhan": "Persons under the age of nine",
+      "stem": "One is NOT necessarily the advantage of VAT in Ethiopia.",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 42,
+      "gold": "A",
+      "berhan": "Preparatory acts are inchoate offenses.",
+      "stem": "Identify correct statement about the nature and function of international law?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 43,
+      "gold": "",
+      "berhan": "A. Income tax",
+      "stem": "All are correct",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 44,
+      "gold": "",
+      "berhan": "B. To maximize income and wealth inequalities",
+      "stem": "Which of the following may not fully considered as a binding source of international law?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 47,
+      "gold": "A",
+      "berhan": "Power of taxation is either given to federal or regional states only.",
+      "stem": "One of the following is a ground on which state courts assume criminal jurisdiction in the international legal system",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 48,
+      "gold": "",
+      "berhan": "VAT absolutely avoids the possibility of tax evasion by taxpayers.",
+      "stem": "One of the following is not wrong about the principle of constitutionalism. Which one?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 49,
+      "gold": "",
+      "berhan": "C) Transfer pricing.",
+      "stem": "One of the following is not the power of the Prime Minister under the FDRE Constitution. Which one?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 51,
+      "gold": "",
+      "berhan": "Consent to enter into agreement",
+      "stem": "What are the main regional instruments that are not currently bindingly adjudicated through courts?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 52,
+      "gold": "",
+      "berhan": "Teachings/publications of concerned & known scholars",
+      "stem": "What is the main international human rights treaty that guarantees the right to freedom of expression at a global level?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 53,
+      "gold": "",
+      "berhan": "It governs only the affairs of sovereign states",
+      "stem": "Which one of the following choices is wrong about limitation and derogation of rights?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 54,
+      "gold": "",
+      "berhan": "Special meaning of terns parties’ are intended to cover",
+      "stem": "Which one of the following is not the vulnerable segments of the society",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 55,
+      "gold": "",
+      "berhan": "Humanitarian intervention is permitted under the charter in exceptional circumstances",
+      "stem": "All are correct about responding to grave violation of human rights except",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 56,
+      "gold": "",
+      "berhan": "All of the above",
+      "stem": "Identify the incorrect statement among the given alternatives.",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 57,
+      "gold": "",
+      "berhan": "All of the above",
+      "stem": "Identify the correct chain in Ethiopian Criminal proceeding",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 58,
+      "gold": "",
+      "berhan": "Specificity in terms of content",
+      "stem": "Which one of the following alternative best describe the natures, purpose and scope of law of civil procedure",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 59,
+      "gold": "",
+      "berhan": "Sovereignty and territory belongs to the government",
+      "stem": "Which one of the following statement false about grounds of assuming judicial jurisdiction on civil case in Ethiopia",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 60,
+      "gold": "",
+      "berhan": "D. The principle of proportionality",
+      "stem": "Which one of the following alternative is true about qualifications of party to civil suit?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 61,
+      "gold": "D",
+      "berhan": "The House of Federation",
+      "stem": "Among the following alternative one is incorrect about Party plaintiff?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key. EXCEPT/WRONG stem."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 62,
+      "gold": "C",
+      "berhan": "He is empowered sign on laws issued by House of Peoples Representatives before they are proclaimed in official Negarit G",
+      "stem": "Which one of the following alternative is a general rule in Ethiopian civil procedure code?",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 64,
+      "gold": "",
+      "berhan": "Arab Charter on Human Rights",
+      "stem": "One is wrong among the following alternatives about adjudication of case without full scale trial",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 65,
+      "gold": "",
+      "berhan": "International Covenant on Civil and Political Rights (ICCPR)",
+      "stem": "One is true about Judicial and Extra-judicial admission of evidence, respectively?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 66,
+      "gold": "",
+      "berhan": "Limitation is temporary whereas derogation is permanent.",
+      "stem": "What is the requirement for a person to be a witness",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 67,
+      "gold": "",
+      "berhan": "None",
+      "stem": "Which of the following alternative is not true concerning standard of proof",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 68,
+      "gold": "",
+      "berhan": "The underlying purpose of international response is to promote impunity.",
+      "stem": "Identify the wrong statement about termination of contract of employment under Ethiopian labour law.",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 69,
+      "gold": "",
+      "berhan": "The defendant, failing to cast reasonable doubt on the prosecution case would be convicted.",
+      "stem": "Identify the wrong statement about minimum labour conditions under the Ethiopian labour proclamation?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 70,
+      "gold": "",
+      "berhan": "It places most importance on convicting the guilty, taking the risk that occasionally some innocent people will be convi",
+      "stem": "Under the Ethiopian labor law which types of employment contact shall be made in written form?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 72,
+      "gold": "",
+      "berhan": "All",
+      "stem": "Which of the following categories of employees not governed by the labour proc. No. 1156/2019?",
+      "kb_miss": true,
+      "cause": "kb_gap_real",
+      "why": "Topic is doctrine/theory/cassation-style material that the statute KB typically does not contain."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 73,
+      "gold": "",
+      "berhan": "Intake – investigation – charge – trial – no case motion – defense – conviction – sentence",
+      "stem": "Of the following identify the critics that L.H. Hart vehemently raises against the natural school of thought?",
+      "kb_miss": true,
+      "cause": "kb_gap_real",
+      "why": "Topic is doctrine/theory/cassation-style material that the statute KB typically does not contain."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 74,
+      "gold": "",
+      "berhan": "A&B",
+      "stem": "Which one is true about the command theory of law",
+      "kb_miss": true,
+      "cause": "kb_gap_real",
+      "why": "Topic is doctrine/theory/cassation-style material that the statute KB typically does not contain."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 75,
+      "gold": "",
+      "berhan": "ALL",
+      "stem": "One is at the very essence of positivist school of legal study",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 76,
+      "gold": "",
+      "berhan": "All",
+      "stem": "Which one of the following is true about justification behind judicial code of conduct?",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 79,
+      "gold": "",
+      "berhan": "B. Representation",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 80,
+      "gold": "",
+      "berhan": "A&B",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 81,
+      "gold": "",
+      "berhan": "All",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 82,
+      "gold": "",
+      "berhan": "None",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 84,
+      "gold": "",
+      "berhan": "All",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 85,
+      "gold": "",
+      "berhan": "All",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 86,
+      "gold": "",
+      "berhan": "For both civil and criminal case the standard of proof is similar.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 87,
+      "gold": "E",
+      "berhan": "C.\tWhere contract employment is terminated by notice, the termination would be effective as of the date of issuance of t",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 93,
+      "gold": "",
+      "berhan": "Natural law is derived from universal reasoning which is immanent to human nature.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "kb_gap_real",
+      "why": "Topic is doctrine/theory/cassation-style material that the statute KB typically does not contain."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 94,
+      "gold": "",
+      "berhan": "All",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 95,
+      "gold": "",
+      "berhan": "All.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 96,
+      "gold": "",
+      "berhan": "Law is the order given by the superior to be ruled by",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 97,
+      "gold": "",
+      "berhan": "For positivist ‘What is law’ shall be the focus of study of law.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 98,
+      "gold": "",
+      "berhan": "All",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 99,
+      "gold": "",
+      "berhan": "He violates his ethical duty to be impartial",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 100,
+      "gold": "",
+      "berhan": "Prosecute the accused person on the bases of law and evidence",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "assosa-2015",
+      "q": 101,
+      "gold": "",
+      "berhan": "Civility",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "batch_retrieval",
+      "why": "Full-exam dump: later questions reused early retrieval and fell back to the KB-miss sentence."
+    },
+    {
+      "exam_id": "debre-berhan-2023",
+      "q": 3,
+      "gold": "E",
+      "berhan": "A. The right to self-determination, including secession, is not entirely unconditional. While recognized, its exercise i",
+      "stem": "Pinpoint the incorrect statement about the right of Nations, Nationalities and Peoples in Ethiopia to self-determination, including secession, as enshrined unde",
+      "kb_miss": false,
+      "cause": "key_in_prompt",
+      "why": "Printed Answer:/Option line was in the dumped exam text, so this mismatch is not a clean legal-skill signal."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 3,
+      "gold": "",
+      "berhan": "C) In the Ethiopian system, regional government have always the final say on their own cases",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 4,
+      "gold": "",
+      "berhan": "D) Accused persons shall not testify against themselves.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 5,
+      "gold": "",
+      "berhan": "B) Negotiation—Adoption—Expression of Consent to be Bound—Entry into Force—Accesion",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 6,
+      "gold": "",
+      "berhan": "D) A subjective principle of action",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 7,
+      "gold": "",
+      "berhan": "D) In strict liability, the occurrence of damage by the defendant is adequate to claim compensation.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 8,
+      "gold": "",
+      "berhan": "C) He/she is first among equal",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 10,
+      "gold": "",
+      "berhan": "B) Terms of contract framed exclusively by one of the parties shall be interpreted in favour of that party.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 11,
+      "gold": "",
+      "berhan": "C) Regional executive even without delegations",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 12,
+      "gold": "",
+      "berhan": "A) Any person can arrest some suspects without warrant",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 14,
+      "gold": "",
+      "berhan": "C) The law presumes that the Employers are always in a better economic position than the employees are.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 15,
+      "gold": "",
+      "berhan": "A) Pending liquidation, personal creditors of the heirs have a right to claim from the properties forming part of succes",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 16,
+      "gold": "",
+      "berhan": "D) Threat to exercise a right shall not be ground for invalidation of a contract unless it was used to exploit one of th",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 17,
+      "gold": "",
+      "berhan": "A) It refers to the sharing of power among the Federal government and regions",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 18,
+      "gold": "",
+      "berhan": "A) An apprenticeship with a practicing lawyer",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 19,
+      "gold": "",
+      "berhan": "C) Maintaining sovereignty is among their reasons.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 20,
+      "gold": "",
+      "berhan": "D) Marriages concluded with person related by consanguinity.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 21,
+      "gold": "",
+      "berhan": "B) Crime committed outside the territory of Ethiopia against international law",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 22,
+      "gold": "",
+      "berhan": "B) Principle of neutrality.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 23,
+      "gold": "",
+      "berhan": "B) Just a general but nont compelling reference of human rights",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 24,
+      "gold": "",
+      "berhan": "D) Compel any worker to execute any task which is unsafe to the environment.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 25,
+      "gold": "",
+      "berhan": "B) There shall be empowered and willing machinery.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 26,
+      "gold": "",
+      "berhan": "C) Laws shall be Intelligible",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 27,
+      "gold": "",
+      "berhan": "C) The Doctrine of Full Faith and Credit",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 28,
+      "gold": "",
+      "berhan": "C) UDHR",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 30,
+      "gold": "",
+      "berhan": "B) Procedural in nature in that the decision of a court remains valid despite non-compliance.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 31,
+      "gold": "",
+      "berhan": "B) It is a mode of acquisition in which the right of the transferee is dependent on the right of the transferor.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 32,
+      "gold": "",
+      "berhan": "A) The FDRE government is a legal moralist",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 33,
+      "gold": "",
+      "berhan": "D) Adpting decisions on individual communications",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 34,
+      "gold": "",
+      "berhan": "A) Law is valid so long as it is inconformity with certain basic moral principles",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 35,
+      "gold": "",
+      "berhan": "A) It connotes the detention and enjoyment of a thing by a person himself only.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 37,
+      "gold": "",
+      "berhan": "D) In both cases, the victim shall claim compensation only from the owner.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 38,
+      "gold": "",
+      "berhan": "D) Expropriation",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 39,
+      "gold": "",
+      "berhan": "D) Omission by commission",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 40,
+      "gold": "",
+      "berhan": "B) Freedom of speech.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 41,
+      "gold": "",
+      "berhan": "D) Support citizens to advance their living standards.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 42,
+      "gold": "",
+      "berhan": "A) In case of invalidation and cancellation parties shall be as far as possible reinstated to their former economic posi",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 44,
+      "gold": "",
+      "berhan": "C) As a rule, negligent crimes are not punishable",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 45,
+      "gold": "",
+      "berhan": "C) Yes, because even if the victim has died, the crime is not punishable with minimum of 15 years rigorous imprisonment.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 46,
+      "gold": "",
+      "berhan": "A) Though the existence of damage is an important element of extra-contractual liability law, not all types of damage ar",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 47,
+      "gold": "",
+      "berhan": "B) Notional concurrence",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 48,
+      "gold": "",
+      "berhan": "A) To respect the right of children to know and be cared for by his/her parent or legal guardian.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 49,
+      "gold": "",
+      "berhan": "D) A prescription which allows creditors to claim their right upon expiry",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 51,
+      "gold": "",
+      "berhan": "C) The existence of many contradictions between the Amharic and the English version of the code.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 52,
+      "gold": "",
+      "berhan": "B) Fine",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 53,
+      "gold": "",
+      "berhan": "B) It is in tune with the greater good for the masses.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 54,
+      "gold": "",
+      "berhan": "A) Search for will of the deceased",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 55,
+      "gold": "",
+      "berhan": "C) She/he is unable to distinctly choose between two conflicting values of professional significance and yet has to ulti",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 56,
+      "gold": "",
+      "berhan": "A) Feelings and emotional injuries shall be recovered by Pecuniary compensation.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 57,
+      "gold": "",
+      "berhan": "C) In concurrent power sharing, there is no capacity disparity between level of government",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 58,
+      "gold": "",
+      "berhan": "A) Law is the product of the common consciousness of the society.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 59,
+      "gold": "",
+      "berhan": "B) They are important in indicating relevant mandatory international norms over a particular issue.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 60,
+      "gold": "",
+      "berhan": "B) Primary rules govern primitive society",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 61,
+      "gold": "",
+      "berhan": "A) Social contract is a wholesale of our rights to the sovereign in return of security",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "kb_gap_real",
+      "why": "Topic is doctrine/theory/cassation-style material that the statute KB typically does not contain."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 62,
+      "gold": "",
+      "berhan": "B) full suspension, due to force majeure more than 10 consecutive days.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 63,
+      "gold": "",
+      "berhan": "A) Less inconvenient and less burdensome than the direct taxes.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 64,
+      "gold": "",
+      "berhan": "D) Fraud by third party can be claimed without due reggard to the knowledge of the other contracting party",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 66,
+      "gold": "",
+      "berhan": "C) commercial agent",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 67,
+      "gold": "",
+      "berhan": "D) Appointing or removing directors and auditors of the company",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 68,
+      "gold": "",
+      "berhan": "A) The judge should strike out the suit as the involvement of Ato Awol in the suit would make the case a federal matter;",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 69,
+      "gold": "",
+      "berhan": "B) She/he has prior knowledge regarding the merit of the case.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 70,
+      "gold": "",
+      "berhan": "C) Its compulsory nature distinguishes tax from all other payments.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 71,
+      "gold": "",
+      "berhan": "C) It is possible to refuse performance of his obligation alleging insufficiency of quantity and quality of fungible thi",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 72,
+      "gold": "",
+      "berhan": "D) The permanent activity of the employer which is done intermittently.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 73,
+      "gold": "",
+      "berhan": "B) Neither all things are objects of property rights, nor are all rights that persons have with respect to things proper",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 74,
+      "gold": "",
+      "berhan": "B) He is pardoned for what he did by the deceased",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 75,
+      "gold": "",
+      "berhan": "D) Necessity",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 76,
+      "gold": "",
+      "berhan": "C) Mixed approach of treaty interpretation",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 77,
+      "gold": "",
+      "berhan": "D) those having fewer dependents",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 78,
+      "gold": "",
+      "berhan": "C) Instant Custom",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 79,
+      "gold": "",
+      "berhan": "C) The duality of executive is preeminent in enforcing federal law with no delay",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 80,
+      "gold": "",
+      "berhan": "B) They attach to persons taking the nationality of a given state.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 81,
+      "gold": "",
+      "berhan": "D) handling assigned activities to his own home for the sake of the employer.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 82,
+      "gold": "",
+      "berhan": "B) The recognition of government",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 83,
+      "gold": "",
+      "berhan": "A) The taxation power is explicitly assigned to the Federal Government by the FDRE constitution.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 84,
+      "gold": "",
+      "berhan": "B) Its recognition of the right to self-determination",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 85,
+      "gold": "",
+      "berhan": "B) A treaty that is formed contrary to a juscogens norm.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 86,
+      "gold": "",
+      "berhan": "B) It involves making value judgments based on moral principles.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 87,
+      "gold": "",
+      "berhan": "C) Crediting a foreign tax in determining a tax in Ethiopia.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 88,
+      "gold": "",
+      "berhan": "C) As it allows parties to present their own case, it is adversarial indeed.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 89,
+      "gold": "",
+      "berhan": "A) A surety contract may not be made in writing.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 90,
+      "gold": "",
+      "berhan": "D) Both co-debtors and co-creditors are not jointly and severally liable and entitled to claims respectively.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 91,
+      "gold": "",
+      "berhan": "D) It depends on the police receive of accusation/complaint.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 92,
+      "gold": "",
+      "berhan": "A) The political nature of the FDRE constitution",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 93,
+      "gold": "",
+      "berhan": "D) A possession that is acquired through violence or force can always produce the effects of a lawful possession.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 94,
+      "gold": "",
+      "berhan": "A) The rules are helpful only to allocate judicial business between courts of a given judicial system exercising similar",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 95,
+      "gold": "",
+      "berhan": "A) Siblings",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 96,
+      "gold": "",
+      "berhan": "D) ‘What are the powers of the police in investigating crimes?’",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 97,
+      "gold": "",
+      "berhan": "B) A dispute arises between a husband and wife. The husband claims his wife is an ugly woman. The wife, in turn, alleges",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 98,
+      "gold": "",
+      "berhan": "A) If the debtor caused damage without awaring cognizant of special circumstances informed by the creditor.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 99,
+      "gold": "",
+      "berhan": "C) Agreements entered in to by the joint owners couldn’t be defective and contrary to mandatory provisions of the civil ",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "debre-markos-university-model-exam",
+      "q": 100,
+      "gold": "",
+      "berhan": "C) The will of the testator",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 2,
+      "gold": "B",
+      "berhan": "C. Instant Custom",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 3,
+      "gold": "C",
+      "berhan": "B. Negotiation—Adoption—Expression of Consent to be Bound—Entry into Force—Accesion",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 4,
+      "gold": "B",
+      "berhan": "C. Mixed approach of treaty interpretation",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 5,
+      "gold": "C",
+      "berhan": "B. A treaty that is formed contrary to a juscogens norm.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 6,
+      "gold": "B",
+      "berhan": "C. Crediting a foreign tax in determining a tax in Ethiopia.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 8,
+      "gold": "D",
+      "berhan": "B. Principle of neutrality.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 9,
+      "gold": "B",
+      "berhan": "A. Less inconvenient and less burdensome than the direct taxes.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 11,
+      "gold": "D",
+      "berhan": "C. Maintaining sovereignty is among their reasons.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 13,
+      "gold": "C",
+      "berhan": "B. A dispute arises between a husband and wife. The husband claims his wife is an ugly woman. The wife, in turn, alleges",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 15,
+      "gold": "C",
+      "berhan": "A. The rules are helpful only to allocate judicial business between courts of a given judicial system exercising similar",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 16,
+      "gold": "A",
+      "berhan": "B. Procedural in nature in that the decision of a court remains valid despite non-compliance.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 17,
+      "gold": "B",
+      "berhan": "D. ‘What are the powers of the police in investigating crimes?’",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 18,
+      "gold": "D",
+      "berhan": "B. It is in tune with the greater good for the masses.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 20,
+      "gold": "A",
+      "berhan": "D. A subjective principle of action",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 21,
+      "gold": "D",
+      "berhan": "B. She/he has prior knowledge regarding the merit of the case.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 22,
+      "gold": "B",
+      "berhan": "C. She/he is unable to distinctly choose between two conflicting values of professional significance and yet has to ulti",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 23,
+      "gold": "C",
+      "berhan": "B. It involves making value judgments based on moral principles.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 24,
+      "gold": "B",
+      "berhan": "D. Omission by commission",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 25,
+      "gold": "D",
+      "berhan": "B. Notional concurrence",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 27,
+      "gold": "B",
+      "berhan": "A. As a rule, preparatory act is punishable",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 28,
+      "gold": "C",
+      "berhan": "D. Necessity",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 31,
+      "gold": "D",
+      "berhan": "B. Freedom of speech.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 35,
+      "gold": "B",
+      "berhan": "A. It connotes the detention and enjoyment of a thing by a person himself only.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 36,
+      "gold": "A",
+      "berhan": "D. Expropriation",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 38,
+      "gold": "D",
+      "berhan": "B. It is a mode of acquisition in which the right of the transferee is dependent on the right of the transferor.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 43,
+      "gold": "C",
+      "berhan": "D. Appointing or removing directors and auditors of the company",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 44,
+      "gold": "D",
+      "berhan": "C. Conversion",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 46,
+      "gold": "C",
+      "berhan": "A. Pending liquidation, personal creditors of the heirs have a right to claim from the properties forming part of succes",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 47,
+      "gold": "B",
+      "berhan": "C. The will of the testator",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 48,
+      "gold": "C",
+      "berhan": "D. Approving legacies under the will",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 49,
+      "gold": "D",
+      "berhan": "A. Siblings",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 51,
+      "gold": "B",
+      "berhan": "D. Compel any worker to execute any task which is unsafe to the environment.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 52,
+      "gold": "C",
+      "berhan": "B. full suspension, due to force majeure more than 10 consecutive days.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 57,
+      "gold": "C",
+      "berhan": "D. Marriages concluded with person related by consanguinity.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 59,
+      "gold": "D",
+      "berhan": "A. properties acquired by onerous title after marriage through the exchange of personal property",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 60,
+      "gold": "A",
+      "berhan": "C. Debts incurred in the interest of the house hold cannot be paid from personal property of spouses.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 61,
+      "gold": "C",
+      "berhan": "B. It is not affected by the agreement of adoption",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 62,
+      "gold": "B",
+      "berhan": "A. Social contract is a wholesale of our rights to the sovereign in return of security",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "kb_gap_real",
+      "why": "Topic is doctrine/theory/cassation-style material that the statute KB typically does not contain."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 64,
+      "gold": "A",
+      "berhan": "B. Primary rules govern primitive society",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 66,
+      "gold": "B",
+      "berhan": "A. Law is the product of the common consciousness of the society.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 67,
+      "gold": "A",
+      "berhan": "C. Laws shall be Intelligible",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 68,
+      "gold": "C",
+      "berhan": "D. In both cases, the victim shall claim compensation only from the owner.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 70,
+      "gold": "D",
+      "berhan": "C. The law presumes that the Employers are always in a better economic position than the employees are.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 71,
+      "gold": "C",
+      "berhan": "A. Though the existence of damage is an important element of extra-contractual liability law, not all types of damage ar",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 72,
+      "gold": "B",
+      "berhan": "C. The minor’s parents",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 73,
+      "gold": "C",
+      "berhan": "D. The extent of damages for the victim may less than the extent of the injury.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 75,
+      "gold": "B",
+      "berhan": "C. It is possible to refuse performance of his obligation alleging insufficiency of quantity and quality of fungible thi",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 76,
+      "gold": "C",
+      "berhan": "A. In case of invalidation and cancellation parties shall be as far as possible reinstated to their former economic posi",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 77,
+      "gold": "A",
+      "berhan": "C. Co-debtors are jointly and severally liable whereas, all co-creditors not are not jointly and severally entitled to c",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 78,
+      "gold": "C",
+      "berhan": "A. Consent of the debtor is mandatory for the making of contracts of guarantee.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 80,
+      "gold": "D",
+      "berhan": "A. Any person can arrest some suspects without warrant",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 81,
+      "gold": "A",
+      "berhan": "B. Adversarial as it doesn’t oblige the suspect to cooperate with the government.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 82,
+      "gold": "B",
+      "berhan": "C. Accuse persons shall be represented by legal counsel to get fair trial.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 84,
+      "gold": "C",
+      "berhan": "D. Adpting decisions on individual communications",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 85,
+      "gold": "D",
+      "berhan": "B. There shall be empowered and willing machinery.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 87,
+      "gold": "B",
+      "berhan": "C. UDHR",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 88,
+      "gold": "C",
+      "berhan": "A. A surety contract may not be made in writing.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 89,
+      "gold": "A",
+      "berhan": "B. A prescription which imposes duty on the beneficiary with certain right after the expiry of certain period of time.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 93,
+      "gold": "D",
+      "berhan": "A. It refers to the sharing of power among the Federal government and regions",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 94,
+      "gold": "A",
+      "berhan": "B. In framework power sharing, both level of government exercise the same autonomy within a single power",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 96,
+      "gold": "B",
+      "berhan": "D. Informally through party Channels",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 97,
+      "gold": "D",
+      "berhan": "C. He/she is first among equal",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "llb-debre-markos",
+      "q": 99,
+      "gold": "C",
+      "berhan": "D. The role played by nation, nationality and people in FDRE constitution",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 2,
+      "gold": "B",
+      "berhan": "A. Share is either movable or immovable property. Under Article 296(1) of the Commercial Code (Proclamation No. 1243/202",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 3,
+      "gold": "C",
+      "berhan": "A. The only business organization which has not legal entity. Under Article 271(1) of the Commercial Code (Proclamation ",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 4,
+      "gold": "B",
+      "berhan": "A. Unless otherwise agreed needs unanimous consent to transfer them to outsiders. Under Article 462(1) of the Commercial",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 5,
+      "gold": "C",
+      "berhan": "A. Share warrant. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 6,
+      "gold": "B",
+      "berhan": "A. Provision of educational services and transfer and dissemination of knowledge except Education by handicraft. Under A",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 8,
+      "gold": "D",
+      "berhan": "A. The other contracting party dies or becomes insolvent before the due date of the contract. Under Article 1773(1) of t",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 9,
+      "gold": "B",
+      "berhan": "A. An agreement that Mr. Z pays the loan if Mr. D fails. The knowledge base does not contain a specific provision on thi",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 11,
+      "gold": "D",
+      "berhan": "A. It cannot be established in the absence of a principal legal or contractual obligation and it normally dies concomita",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 13,
+      "gold": "C",
+      "berhan": "A. Any one claiming the existence of will shall present the original document of will. Under Article 905(1) of the Civil",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 15,
+      "gold": "C",
+      "berhan": "A. Any expense incurred for the education of the heir. Under Article 1000(1) of the Civil Code, expenses incurred for th",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 16,
+      "gold": "A",
+      "berhan": "A. An heir intentionally murdered the spouse and not sentenced. Under Article 843(1)(a) of the Civil Code, an heir who h",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 17,
+      "gold": "B",
+      "berhan": "A. Descendant of the testator can be expressly disinherit due to justifiable reason. Under Article 919(1) of the Civil C",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 18,
+      "gold": "D",
+      "berhan": "A. It has no period of limitation. Under Article 2169 of the Civil Code, actions for unjust enrichment are subject to a ",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 20,
+      "gold": "A",
+      "berhan": "A. Admonition. Under Article 2090 of the Civil Code, the remedies for tort liability include restitution in kind and com",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 21,
+      "gold": "D",
+      "berhan": "A. The income tax collected from employees. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 22,
+      "gold": "B",
+      "berhan": "A. He gives a manufactured product for donation. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 23,
+      "gold": "C",
+      "berhan": "A. Bontu can ask for amendment of contract of marriage since the condition under the original contract of marriage mater",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 24,
+      "gold": "B",
+      "berhan": "A. If the child is born 300 days after the court declared the absence of the husband. Under Article 769(1) of the Civil ",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 25,
+      "gold": "D",
+      "berhan": "A. Although he attained minimum majority age (18), he is still eligible to get maintenance since he is law student and h",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 27,
+      "gold": "B",
+      "berhan": "A. As family is the fundamental unit of the society, the FDRE Constitution gives recognition and protection to both marr",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 28,
+      "gold": "C",
+      "berhan": "A. A prima facie evidence of ownership of immovable objects. Under Article 1149(1) of the Civil Code, possession of mova",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 31,
+      "gold": "D",
+      "berhan": "A. Co-owners, descendant, ascendant, brothers. Under Article 1450 of the Civil Code, the order of priority for exercisin",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 35,
+      "gold": "B",
+      "berhan": "A. Impeachment. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 36,
+      "gold": "A",
+      "berhan": "A. How the relation between the executive and the legislature is organized. The knowledge base does not contain a specif",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 38,
+      "gold": "D",
+      "berhan": "A. Absence of general limitation clause. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 43,
+      "gold": "C",
+      "berhan": "A. Crime of homicide. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 44,
+      "gold": "D",
+      "berhan": "A. Mr. X breaks in to somebody’s house, steal some property and rape the lady in the house. The knowledge base does not ",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 46,
+      "gold": "C",
+      "berhan": "A. Employee’s fringe benefit is not taxable under the schedule. The knowledge base does not contain a specific provision",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 47,
+      "gold": "B",
+      "berhan": "A. Regarding revenue power, the constitution clearly divided power of taxing. Under Article 96 of the FDRE Constitution,",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 48,
+      "gold": "C",
+      "berhan": "A. principle of efficiency. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 49,
+      "gold": "D",
+      "berhan": "A. Taxes not specifically allocated to the federal government are always left to the regional states. Under Article 99 o",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 51,
+      "gold": "B",
+      "berhan": "A. Tax rate increase as tax base increases. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 52,
+      "gold": "C",
+      "berhan": "A. Domicile principle. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 57,
+      "gold": "C",
+      "berhan": "A. Confirmation of reciprocity between the countries. The knowledge base does not contain a specific provision on this p",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 59,
+      "gold": "D",
+      "berhan": "A. The increasing Cold War tensions between the Socialist and West States. The knowledge base does not contain a specifi",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 60,
+      "gold": "A",
+      "berhan": "A. The Universal Declaration of Human Rights. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 61,
+      "gold": "C",
+      "berhan": "A. The source of human rights is human dignity. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 62,
+      "gold": "B",
+      "berhan": "A. Freedom to form or join trade unionism. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 64,
+      "gold": "A",
+      "berhan": "A. Right to punishment. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 66,
+      "gold": "B",
+      "berhan": "A. It was enacted by the then legislative organ. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 67,
+      "gold": "A",
+      "berhan": "A. The concept of cassation over cassation is not alien to the Ethiopian legal system. The knowledge base does not conta",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 68,
+      "gold": "C",
+      "berhan": "A. Judicial Jurisdiction. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 70,
+      "gold": "D",
+      "berhan": "A. An appeal is constitutional, procedural as well as substantive right in Ethiopia. The knowledge base does not contain",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 71,
+      "gold": "C",
+      "berhan": "A. Dis-missing the case. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 72,
+      "gold": "B",
+      "berhan": "A. The Court May order Ex parte proceedings. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 73,
+      "gold": "C",
+      "berhan": "A. H may only search the premises described in the warrant and may only search for the items listed in the warrant. The ",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 75,
+      "gold": "B",
+      "berhan": "A. As a rule communication of information to the police about the commission of the crimes is a duty. The knowledge base",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 76,
+      "gold": "C",
+      "berhan": "A. The defendant, failing to cast reasonable doubt on the prosecution case would be convicted. The knowledge base does n",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 77,
+      "gold": "A",
+      "berhan": "A. The fact that the case is finalized in the trial court. The knowledge base does not contain a specific provision on t",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 78,
+      "gold": "C",
+      "berhan": "A. Authentication by undertaking oath. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 80,
+      "gold": "D",
+      "berhan": "A. There is no privilege that are accorded to witness at all. The knowledge base does not contain a specific provision o",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 81,
+      "gold": "A",
+      "berhan": "A. Specific demonstrative rule. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 82,
+      "gold": "B",
+      "berhan": "A. It is possible to present documentary evidences at any stage of court proceedings. The knowledge base does not contai",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 84,
+      "gold": "C",
+      "berhan": "A. The FDRE government has issued a law that bans marriage and sexual affairs among men and women until 2027. The knowle",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 85,
+      "gold": "D",
+      "berhan": "A. Laws set by men for men in pursuance of political rights. The knowledge base does not contain a specific provision on",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 87,
+      "gold": "B",
+      "berhan": "A. The Right to secession. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 88,
+      "gold": "C",
+      "berhan": "A. Sociological School. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 89,
+      "gold": "A",
+      "berhan": "A. The Laws of god. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 93,
+      "gold": "D",
+      "berhan": "A. Bargaining could be made between individual employees and employer. Under Article 133(1) of the Labour Proclamation N",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 94,
+      "gold": "A",
+      "berhan": "A. He has suspend the employment contract the company has with the arrested employee. Under Article 28(1)(c) of the Labo",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 96,
+      "gold": "B",
+      "berhan": "A. Two month. Under Article 35(1)(c) of the Labour Proclamation No. 1156/2019, a worker who has completed his probation ",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 97,
+      "gold": "D",
+      "berhan": "A. Contract of employment can be concluded only with natural person. Under Article 4(1) of the Labour Proclamation No. 1",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 99,
+      "gold": "C",
+      "berhan": "A. exparte-communication. The knowledge base does not contain a specific provision on this point.",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "ll-b-model-exit-exam-ambo-uni-sol",
+      "q": 100,
+      "gold": "",
+      "berhan": "A. To have high calibre in legal knowledge, skill, thoroughness and preparation. The knowledge base does not contain a s",
+      "stem": "",
+      "kb_miss": true,
+      "cause": "prompt_conflict",
+      "why": "Exam overlay demanded a letter; system prompt forbade guessing — Berhan emitted a choice then the KB-miss line."
+    },
+    {
+      "exam_id": "samara",
+      "q": 8,
+      "gold": "B",
+      "berhan": "C. A contract can be formed even between absent parties as long as there are appropriate offer and acceptance between th",
+      "stem": "Which one of the following statements is correct about formation of contracts under the Ethiopian law of contracts?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 9,
+      "gold": "A",
+      "berhan": "D. The interest harmed must have always monetary value.",
+      "stem": "Which one of the following is incorrect in relation to extra contractual liability under Ethiopian law?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 10,
+      "gold": "A",
+      "berhan": "B. The Commercial Code is a self – contained law on traders and there is no need for the application of the Civil Code o",
+      "stem": "One of the following statements is not true about the applicability of the Civil Code on the status and activities of traders",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 11,
+      "gold": "D",
+      "berhan": "A. It is not required to be registered.",
+      "stem": "Which one of the following aspects typically characterizes a joint venture form of business organization under the Ethiopian law",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 13,
+      "gold": "B",
+      "berhan": "D. Vicarious liability.",
+      "stem": "Which one of the following is different among the given alternatives?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 14,
+      "gold": "D",
+      "berhan": "A. Hanna cannot claim the watch from Yafet.",
+      "stem": "One of the following matters is not required by the Commercial Code to be indicated by the Memorandum of Association",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 15,
+      "gold": "D",
+      "berhan": "B. The general manager of the company.",
+      "stem": "Which one of the following is true about elements of business?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 16,
+      "gold": "A",
+      "berhan": "D. All.",
+      "stem": "Which of the following organ has the power to call general meeting of shareholders of Share Company?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 18,
+      "gold": "C",
+      "berhan": "D. All.",
+      "stem": "Which of the following is true about a share?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 19,
+      "gold": "D",
+      "berhan": "A. Special meeting is a meeting in which all shareholders shall attend.",
+      "stem": "Which one of the following situations does not bring about extra-contractual liability for the author of an act even though his act causes material damage?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 21,
+      "gold": "B",
+      "berhan": "C. All.",
+      "stem": "one of the following statements is not true about the nature of marriage?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 23,
+      "gold": "B",
+      "berhan": "D. All.",
+      "stem": "One of the following is not the obligation to supply maintenance",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 24,
+      "gold": "A",
+      "berhan": "B. Commercial in nature.",
+      "stem": "Among the following alternatives which one is characteristic patrimony?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 25,
+      "gold": "A",
+      "berhan": "D. All.",
+      "stem": "Which one of the following alternatives is among the characteristic of ownership?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 27,
+      "gold": "D",
+      "berhan": "A. The fulfillment of a conditional contract.",
+      "stem": "Among the following one is mandatory requirement to acquire ownership via possession in good faith",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 28,
+      "gold": "B",
+      "berhan": "A. A person intentionally fails to perform his contractual obligation.",
+      "stem": "From the following alternatives one is illegitimate cause of transferring and acquiring ordinary corporal chattels",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 29,
+      "gold": "D",
+      "berhan": "B. Defect in the formation of a contract.",
+      "stem": "Among the following alternatives which one is the characteristics of servitude under the Ethiopian property law",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 30,
+      "gold": "B",
+      "berhan": "D. Immorality of object of contract.",
+      "stem": "One of the following alternatives is true about expropriation of private properties",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 31,
+      "gold": "B",
+      "berhan": "D. All type of marriage follows the same celebration formality.",
+      "stem": "Which of the following is not a source of extra-contractual liability?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 32,
+      "gold": "A",
+      "berhan": "B. time of celebration of marriage.",
+      "stem": "Which one of the following is not the possible rational for holding a person liable for the wrongful conduct of another",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 33,
+      "gold": "D",
+      "berhan": "C. all property acquired by during marriage by onerous title.",
+      "stem": "Which of the following is not qualified to claim maintenance of a person/ victim of moral accident under our civil code of Ethiopia",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 34,
+      "gold": "D",
+      "berhan": "E. Each of the spouse shall freely administer his/her personal property.",
+      "stem": "Which one of the following is not a remedy under the law of Ethiopia extra-contractual liability",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 36,
+      "gold": "B",
+      "berhan": "C. If the child is born 300 days after the court declared the absence of the husband.",
+      "stem": "Which one of the following is different from the rest?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 37,
+      "gold": "D",
+      "berhan": "C. An obligation to supply maintenance does not exist between brothers and sisters.",
+      "stem": "Which one of the following relationship may create vicarious liability under Ethiopian extra contractual liability?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 38,
+      "gold": "D",
+      "berhan": "A. the father of the child.",
+      "stem": "Under the Ethiopian law of contracts, the validity of any contract necessarily requires the cumulative presence of:",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 39,
+      "gold": "D",
+      "berhan": "B. Patrimony is attached to its holder.",
+      "stem": "Which one of the following does not vitiate consent with respect to will?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 40,
+      "gold": "A",
+      "berhan": "C. It is a bundle of right.",
+      "stem": "Which one among the following is the legal consequence of the merger of the property of the inheritance with personal property of the heirs",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 42,
+      "gold": "B",
+      "berhan": "D. The buyer should purchase the thing from a person who has no a valid title.",
+      "stem": "Which one of the following is true about personal creditors of the heirs and creditors of the heirs",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 43,
+      "gold": "B",
+      "berhan": "C. Snatching a good and lapse of a period of limitation for a legal action.",
+      "stem": "Identify a choice that is incorrect about the opening of succession",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 44,
+      "gold": "C",
+      "berhan": "D. It is aright in rem.",
+      "stem": "which one of the following relationships may create vicarious liability under the Ethiopia law?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 45,
+      "gold": "B",
+      "berhan": "C. Properties are expropriated in the interest of the public at large.",
+      "stem": "which one of subject to rules governing transaction involving corporal chattel",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 46,
+      "gold": "B",
+      "berhan": "C. Victim contribution to the materialization of damage.",
+      "stem": "which of the following concepts is unrelated to Ethiopia tort law",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 48,
+      "gold": "B",
+      "berhan": "C. Abuse of power.",
+      "stem": "Under the Ethiopian law, the finder of lost corporal chattel has",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 49,
+      "gold": "D",
+      "berhan": "C. Deceased person’s brother.",
+      "stem": "which of the following is incorrect in relation to extra-contractual liability under the Ethiopian law",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 50,
+      "gold": "A",
+      "berhan": "D. Forced performance.",
+      "stem": "One of the following is not correct about a State?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 51,
+      "gold": "D",
+      "berhan": "B. Criminal liability and forced labor.",
+      "stem": "Which one of the following cases is not an external checking mechanism of government’s power?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 52,
+      "gold": "B",
+      "berhan": "D. All.",
+      "stem": "One of the following correctly explains the case of FDRE Constitution in relation to sovereignty:",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 53,
+      "gold": "B",
+      "berhan": "D. Counter guarantor.",
+      "stem": "One of the following statements holds true with regard to state and nation?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 54,
+      "gold": "C",
+      "berhan": "B. Employers for employees.",
+      "stem": "One of the following is not given in the FDRE Constitution as expression of the sovereign power of the Nations, Nationalities, and People of Ethiopia:",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 55,
+      "gold": "D",
+      "berhan": "B. Ethiopian courts are not prohibited from interpreting contracts where interpretation is genuinely called for because ",
+      "stem": "One of the following terms doesn’t represent the basic feature of constitution?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 56,
+      "gold": "B",
+      "berhan": "A. Object, consent capacity, and form when the law requires.",
+      "stem": "One of the following features doesn’t the fundamental principle of an ideal Constitution?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 59,
+      "gold": "D",
+      "berhan": "C. The contract of marriage is in harmony with mandatory provisions of the law.",
+      "stem": "One of the following statements is not correct about unwritten constitution?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 60,
+      "gold": "C",
+      "berhan": "D. The will contains additions in the margins or between the lines.",
+      "stem": "One of the following statements is correct about presidential system?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 61,
+      "gold": "D",
+      "berhan": "C. Error.",
+      "stem": "One of the following statements doesn’t represent the merit of parliamentary system?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 62,
+      "gold": "D",
+      "berhan": "B. Adamu can benefit from the legacy even without complying with the requirement.",
+      "stem": "One of the following statements is not consistent with general concept, principles and legal traditions visa-vise constitutional interpretation?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 63,
+      "gold": "B",
+      "berhan": "C. Sara.",
+      "stem": "One is not correct about distribution of judicial power under the FDRE Constitution?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 64,
+      "gold": "B",
+      "berhan": "D. None.",
+      "stem": "One of the following principles doesn’t represent the fundamental principles of criminal law?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 65,
+      "gold": "A",
+      "berhan": "D. A and C.",
+      "stem": "One of the following statements is not correct about the scope of derivative criminal jurisdiction of Ethiopian courts?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 68,
+      "gold": "D",
+      "berhan": "A. It shall open after the closure of liquidation.",
+      "stem": "One of the following doesn’t fit with the elements of Advertent (conscious) Negligence?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 70,
+      "gold": "D",
+      "berhan": "C. Movable by nature.",
+      "stem": "One of the following doesn’t represent the element of indirect intention?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 72,
+      "gold": "B",
+      "berhan": "D. declaration.",
+      "stem": "One of the following statement doesn’t comprise as underlying rationales of transfer of revenue in Ethiopia?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "samara",
+      "q": 74,
+      "gold": "D",
+      "berhan": "C. The obligation to take measure of publicity with a view to informing the owner of the fact that he found the chattel.",
+      "stem": "One of the following statements correctly depict the meaning of excess cost of taxation?",
+      "kb_miss": false,
+      "cause": "alignment_noise",
+      "why": "Sheet has more Answer lines than Berhan questions; gold Qn likely does not pair with Berhan Qn."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 21,
+      "gold": "E",
+      "berhan": "A. They lay down new rules to govern the future conduct of the ratifying States.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 23,
+      "gold": "C",
+      "berhan": "A. The reservation could be rejected if not endorsed by all parties.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 24,
+      "gold": "B",
+      "berhan": "C. The legal personality of international organizations is to be implied in the capacities, rights, and privileges confe",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 25,
+      "gold": "C",
+      "berhan": "D. None of the above",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 27,
+      "gold": "A",
+      "berhan": "D. All",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 28,
+      "gold": "B",
+      "berhan": "E. None of the above",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 29,
+      "gold": "C",
+      "berhan": "A. State’s consent expressed in violation of its internal laws governing competence to conclude treaties.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 30,
+      "gold": "B",
+      "berhan": "E. All of the above",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 31,
+      "gold": "C",
+      "berhan": "D. All",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 32,
+      "gold": "B",
+      "berhan": "E. No answer",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 33,
+      "gold": "B",
+      "berhan": "D. A and B",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 34,
+      "gold": "C",
+      "berhan": "A. The recognition of one State by another is a mere political act that does not confirm the statehood of the recognized",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 35,
+      "gold": "C",
+      "berhan": "D. Arbitration",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 37,
+      "gold": "D",
+      "berhan": "B. Absence of distress",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 38,
+      "gold": "A",
+      "berhan": "B. The conduct must be carried out in the presence of official authorities.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 39,
+      "gold": "D",
+      "berhan": "C. The fundamental basis of monism is the not issue of what happens when both conflict, as they often do.",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 40,
+      "gold": "E",
+      "berhan": "A. To uphold the abuse",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 41,
+      "gold": "C",
+      "berhan": "A. Development of a Professional Legal System",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    },
+    {
+      "exam_id": "wolaita-sodo-2018",
+      "q": 42,
+      "gold": "B",
+      "berhan": "C. Virtue Ethics",
+      "stem": "",
+      "kb_miss": false,
+      "cause": "option_mismatch",
+      "why": "Retrieved or guessed a legally nearby option, not the marked key."
+    }
+  ]
+}

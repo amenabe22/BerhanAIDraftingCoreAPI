@@ -62,7 +62,7 @@ class SemanticEditAgent:
         }
 
         output_language = (document_language or "").lower()
-        if output_language not in ("en", "am"):
+        if output_language not in ("en", "am", "om"):
             output_language = detect_language(instruction)
 
         if not validate_tiptap_structure(doc_json):

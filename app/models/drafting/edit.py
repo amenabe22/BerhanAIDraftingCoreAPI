@@ -13,8 +13,8 @@ class EditRequest(BaseModel):
     doc_json: dict[str, Any] = Field(..., description="Full TipTap JSON document")
     instruction: str = Field(..., min_length=1, description="Natural language edit instruction")
     doc_id: str | None = Field(default=None, description="Document UUID for tracking")
-    document_language: Literal["en", "am"] | None = Field(
-        default=None, description="Output language for generated text"
+    document_language: Literal["en", "am", "om"] | None = Field(
+        default=None, description="Output language for generated text (en, am, om)"
     )
     compliance_context: dict[str, Any] | None = Field(
         default=None, description="Optional compliance editor_fix context (phase-2)"

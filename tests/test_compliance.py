@@ -51,6 +51,13 @@ def test_request_language_default():
     assert r.language == "en"
 
 
+def test_request_accepts_oromo_and_aliases():
+    r = ComplianceAnalysisRequest(doc_id="some-uuid", language="om")
+    assert r.language == "om"
+    r2 = ComplianceAnalysisRequest(doc_id="some-uuid", language="oromo")
+    assert r2.language == "om"
+
+
 def test_request_check_level_default_and_accepted():
     r = ComplianceAnalysisRequest(doc_id="some-uuid")
     assert r.check_level == "quick"

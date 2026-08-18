@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -73,6 +74,24 @@ def test_prompt_builder_oromo():
     )
     assert "Afaan Oromo" in gen
     assert 'MUST be "om"' in gen
+
+
+def test_openapi_supports_oromo_and_models(client: TestClient):
+    spec = client.app.openapi()
+    lang = spec["components"]["schemas"]["Language"]["enum"]
+    assert set(lang) == {"am", "en", "om"}
+    models = spec["components"]["schemas"]["GenerateRequest"]["properties"]["model"]
+    blob = json.dumps(models)
+    for m in (
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-pro",
+        "anthropic/claude-sonnet-4",
+        "openai/gpt-4.1",
+        "openai/gpt-4.1-mini",
+    ):
+        assert m in blob
+    edit_lang = spec["components"]["schemas"]["EditRequest"]["properties"]["document_language"]
+    assert "om" in json.dumps(edit_lang)
 
 
 @pytest.mark.asyncio

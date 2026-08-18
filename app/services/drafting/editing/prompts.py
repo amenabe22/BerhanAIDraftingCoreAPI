@@ -11,6 +11,11 @@ def output_language_instruction(document_language: str | None) -> str:
             "CRITICAL: All generated new_text MUST be in Amharic (አማርኛ). "
             "Do not translate to English."
         )
+    if document_language == "om":
+        return (
+            "CRITICAL: All generated new_text MUST be in Afaan Oromoo. "
+            "Do not translate to English or Amharic."
+        )
     if document_language == "en":
         return "CRITICAL: All generated new_text MUST be in English."
     return "Generate new_text in the same language as the document blocks."
