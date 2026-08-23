@@ -169,6 +169,7 @@ def test_doc_consultant_system_mentions_both_tools():
 
     assert "search_user_documents" in DOC_CONSULTANT_SYSTEM
     assert "search_legal_knowledge" in DOC_CONSULTANT_SYSTEM
+    assert "apply_document_edit" in DOC_CONSULTANT_SYSTEM
     assert "Legal AI Model built by BerhanAI" in DOC_CONSULTANT_SYSTEM
 
 
@@ -202,6 +203,10 @@ def test_build_doc_graph_returns_compiled_graph():
             return_value=MagicMock(name="search_user_documents"),
         ),
         patch("app.graph.ToolNode"),
+        patch(
+            "app.services.drafting.editing.tools.create_apply_document_edit_tool",
+            return_value=MagicMock(name="apply_document_edit"),
+        ),
     ):
         graph = build_doc_graph("test-doc-id")
     assert isinstance(graph, CompiledStateGraph)
@@ -215,6 +220,10 @@ def test_build_doc_graph_has_agent_and_tools_nodes():
         patch("app.graph.build_chat_llm", return_value=MagicMock()),
         patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
         patch("app.graph.ToolNode"),
+        patch(
+            "app.services.drafting.editing.tools.create_apply_document_edit_tool",
+            return_value=MagicMock(name="apply_document_edit"),
+        ),
     ):
         graph = build_doc_graph("test-doc-id")
     assert "agent" in set(graph.nodes)
@@ -227,14 +236,19 @@ def test_get_doc_graph_returns_same_instance_for_same_doc_id():
     from app.graph import get_doc_graph
 
     doc_id = "stable-doc-id-for-test"
+    cache_key = (doc_id, True)
     original = graph_module._doc_graphs.copy()
     try:
-        graph_module._doc_graphs.pop(doc_id, None)
+        graph_module._doc_graphs.pop(cache_key, None)
         with (
             patch("app.graph._tool", return_value=_mock_legal_tool()),
             patch("app.graph.build_chat_llm", return_value=MagicMock()),
             patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
             patch("app.graph.ToolNode"),
+            patch(
+                "app.services.drafting.editing.tools.create_apply_document_edit_tool",
+                return_value=MagicMock(name="apply_document_edit"),
+            ),
         ):
             g1 = get_doc_graph(doc_id)
             g2 = get_doc_graph(doc_id)
@@ -256,6 +270,10 @@ def test_get_doc_graph_builds_separate_graphs_for_different_doc_ids():
             patch("app.graph.build_chat_llm", return_value=MagicMock()),
             patch("app.graph.get_doc_blocks_retriever_tool", return_value=MagicMock()),
             patch("app.graph.ToolNode"),
+            patch(
+                "app.services.drafting.editing.tools.create_apply_document_edit_tool",
+                return_value=MagicMock(name="apply_document_edit"),
+            ),
         ):
             g1 = get_doc_graph("doc-aaa")
             g2 = get_doc_graph("doc-bbb")

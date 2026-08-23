@@ -22,7 +22,11 @@ from app.services.drafting.editing.prompts import (
     verify_system_prompt,
     verify_user_prompt,
 )
-from app.services.drafting.editing.retrieval import neighbor_blocks, rank_blocks_for_instruction
+from app.services.drafting.editing.retrieval import (
+    expand_section_blocks,
+    neighbor_blocks,
+    rank_blocks_for_instruction,
+)
 from app.services.drafting.editing.schemas import (
     ensure_op_ids,
     generate_fallback_operation,
@@ -124,7 +128,22 @@ class SemanticEditAgent:
                 )
 
             target_ids = {t["block_id"] for t in targets if t.get("block_id")}
-            edit_context = neighbor_blocks(all_blocks, target_ids, window=1)
+
+            # Section expand: heading seeds → full section body (fixes multi-block
+            # requests like "shorten DEFINITIONS" that previously got tiny context).
+            seed_blocks = [b for b in all_blocks if b["block_id"] in target_ids]
+            has_heading_seed = any(b.get("type") == "heading" for b in seed_blocks)
+            if scope in ("multiple", "section", "global") or has_heading_seed:
+                expanded_ids = expand_section_blocks(all_blocks, target_ids)
+                if expanded_ids != target_ids:
+                    metrics["stages"]["section_expand"] = {
+                        "before": len(target_ids),
+                        "after": len(expanded_ids),
+                    }
+                    target_ids = expanded_ids
+                    if scope == "single":
+                        scope = "section"
+
             if scope == "global":
                 edit_context = [
                     b
@@ -135,6 +154,19 @@ class SemanticEditAgent:
                         if len(tok) > 3
                     )
                 ] or ranked[:10]
+            elif scope in ("section", "multiple") or len(target_ids) > 3:
+                # Full section / multi-target context — no 3-block neighbor cap.
+                id_order = {b["block_id"]: i for i, b in enumerate(all_blocks)}
+                edit_context = sorted(
+                    [b for b in all_blocks if b["block_id"] in target_ids],
+                    key=lambda b: id_order.get(b["block_id"], 0),
+                )
+                max_section = settings.EDIT_SECTION_MAX_BLOCKS
+                if max_section and len(edit_context) > max_section:
+                    edit_context = edit_context[:max_section]
+                    target_ids = {b["block_id"] for b in edit_context}
+            else:
+                edit_context = neighbor_blocks(all_blocks, target_ids, window=1)
 
             all_block_ids = [b["block_id"] for b in all_blocks]
             validated_operations: list[dict[str, Any]] = []

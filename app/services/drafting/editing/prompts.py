@@ -29,7 +29,7 @@ Respond with JSON only:
   "targets": [
     {"block_id": "...", "action": "replace|insert|remove|rewrite", "confidence": 0.0-1.0, "reason": "..."}
   ],
-  "scope": "single|multiple|global",
+  "scope": "single|multiple|section|global",
   "confidence": 0.0-1.0
 }
 
@@ -37,6 +37,8 @@ Rules:
 - block_id MUST be copied exactly from the candidate list (internal IDs — never from the user instruction).
 - Match blocks by their text content, type (heading vs paragraph), and position relative to the request.
 - Use confidence >= 0.7 only when you are sure of the target.
+- For section-wide edits (shorten/simplify/rewrite an entire part like Definitions, Recitals, Termination):
+  set scope to "section" and target the section HEADING block_id (the pipeline expands to the full section body).
 - For global replace (change X to Y everywhere), set scope to "global" and list all matching blocks.
 - If no block matches the natural-language intent, return empty targets and confidence 0."""
 

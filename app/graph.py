@@ -164,11 +164,14 @@ DOC_CONSULTANT_SYSTEM = f"""{_IDENTITY_GUARDRAIL}
 
 {_TONE_GUIDANCE}
 
-You are a hybrid legal consultant. A document has already been loaded and is ready for you to search — never ask the user to provide or upload anything.
+You are a hybrid legal consultant and document editor. A document has already been loaded and is ready for you to search and edit — never ask the user to provide or upload anything.
 
-You have two tools:
+You have three tools:
 1. search_user_documents — searches the loaded document (contracts, agreements, letters, etc.)
 2. search_legal_knowledge — searches the Ethiopian law knowledge base (statutes, proclamations, civil code, etc.)
+3. apply_document_edit — applies a concrete edit to the open document (rewrite, shorten, add, remove, fix). Use when the user wants the document changed, including follow-ups like "do that" / "yes, shorten it". Pass a clear, self-contained instruction. Do NOT call this for pure questions or explanations.
+
+Decide for yourself whether to answer, ask one clarifying question, or call apply_document_edit — based on user intent and conversation context. There is no keyword checklist.
 
 DEFAULT BEHAVIOR — call search_user_documents FIRST for every user message, unless the question is purely about a legal concept with zero possible connection to any document. When in doubt, search the document first.
 
@@ -182,10 +185,12 @@ When searching, rephrase vague queries into specific search terms that will matc
 
 After searching the document:
 - If the question also involves applicable law, rights, or compliance — also call search_legal_knowledge.
-- You may call both tools in sequence.
+- You may call search tools and then apply_document_edit in the same turn when the user clearly wants a change.
+- If the user is only asking a question, answer without calling apply_document_edit.
+- If you suggested an edit and the user confirms, call apply_document_edit with a restated concrete instruction.
 
 {_RETRIEVAL_GUIDANCE}
-Give clear, practical answers in plain language. Explain what the document says, what the law requires, any risks or implications, and recommended actions. Reference specific clauses (by block_id) and legal articles where relevant (with pinpoint article numbers from tool results). Do not dump raw blocks. If neither tool returns useful content, say so and advise the user to consult qualified legal counsel."""
+Give clear, practical answers in plain language. Explain what the document says, what the law requires, any risks or implications, and recommended actions. Reference specific clauses (by block_id) and legal articles where relevant (with pinpoint article numbers from tool results). Do not dump raw blocks. After an edit tool result, briefly confirm what changed (or why it could not). If neither search tool returns useful content, say so and advise the user to consult qualified legal counsel."""
 
 
 def _trim(messages: list[BaseMessage], system: SystemMessage) -> list[BaseMessage]:
@@ -564,20 +569,28 @@ def get_graph():
 # ---------------------------------------------------------------------------
 
 
-def build_doc_graph(doc_id: str):
+def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
     """Build a doc-consultant graph scoped to a single document.
 
     Each call creates a fresh graph with a Qdrant filter locked to *doc_id*,
     so the search_user_documents tool never touches another user's data.
     The LLM and legal-knowledge tool are still cached singletons.
     Includes the grounding verifier so doc-agent answers are also citation-hardened.
+
+    When *enable_edit* is True, binds ``apply_document_edit`` which reads TipTap
+    ``doc_json`` from the LangGraph runnable config (set per request).
     """
+    from app.services.drafting.editing.tools import create_apply_document_edit_tool
+
     doc_tool = get_doc_blocks_retriever_tool(doc_id)
     # Doc graph always uses the env-configured default model with reasoning off.
     _default_llm = build_chat_llm(
         model=resolve_model(None), enable_reasoning=False, streaming=True
     )
-    llm_with_doc_tools = _default_llm.bind_tools([_tool(), doc_tool])
+    tools = [_tool(), doc_tool]
+    if enable_edit:
+        tools.append(create_apply_document_edit_tool())
+    llm_with_doc_tools = _default_llm.bind_tools(tools)
 
     def _node(state: dict) -> dict:
         messages = state["messages"]
@@ -622,7 +635,7 @@ def build_doc_graph(doc_id: str):
 
         return {"messages": [response]}
 
-    tool_node = ToolNode([_tool(), doc_tool])
+    tool_node = ToolNode(tools)
 
     workflow = StateGraph(AgentState)
     workflow.add_node("agent", _node)
@@ -645,13 +658,14 @@ def build_doc_graph(doc_id: str):
     return workflow.compile(checkpointer=MemorySaver())
 
 
-# Cache of compiled doc graphs keyed by doc_id so repeat requests for the
-# same document reuse the same graph (and its MemorySaver checkpointer).
-_doc_graphs: dict[str, object] = {}
+# Cache of compiled doc graphs keyed by (doc_id, enable_edit) so repeat requests
+# for the same document reuse the same graph (and its MemorySaver checkpointer).
+_doc_graphs: dict[tuple[str, bool], object] = {}
 
 
-def get_doc_graph(doc_id: str):
+def get_doc_graph(doc_id: str, *, enable_edit: bool = True):
     """Return a cached compiled doc-graph for *doc_id*, building it if needed."""
-    if doc_id not in _doc_graphs:
-        _doc_graphs[doc_id] = build_doc_graph(doc_id)
-    return _doc_graphs[doc_id]
+    key = (doc_id, enable_edit)
+    if key not in _doc_graphs:
+        _doc_graphs[key] = build_doc_graph(doc_id, enable_edit=enable_edit)
+    return _doc_graphs[key]
