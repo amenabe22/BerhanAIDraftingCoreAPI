@@ -75,6 +75,9 @@ class DocChatRequest(BaseModel):
     doc_id: str
     thread_id: str | None = None
     language: Language | None = None
+    # TipTap JSON for apply_document_edit. When omitted, edit tool reports no document.
+    doc_json: dict | None = None
+    document_language: str | None = None
 
 
 app = FastAPI(title="Berhan Advisor Knowledge Agent")
@@ -216,6 +219,8 @@ async def _stream_endpoint(
     system_prompt: str,
     graph,
     status_message: str = "Searching legal knowledge base…",
+    *,
+    extra_configurable: dict | None = None,
 ) -> StreamingResponse:
     thread_id = request.thread_id or str(uuid.uuid4())
     file_url = (request.file_url or "").strip() or None
@@ -230,6 +235,7 @@ async def _stream_endpoint(
             "has_file_url": bool(file_url),
             "model": resolved_model,
             "enable_reasoning": enable_reasoning,
+            "has_doc_json": bool((extra_configurable or {}).get("doc_json")),
         },
     )
 
@@ -255,6 +261,7 @@ async def _stream_endpoint(
                 "thread_id": thread_id,
                 "model": resolved_model,
                 "enable_reasoning": enable_reasoning,
+                **(extra_configurable or {}),
             }
         }
         inputs = {"messages": initial_messages}
@@ -318,6 +325,11 @@ async def _stream_endpoint(
                                 "repair_attempted": payload.get("repair_attempted", False),
                                 "reason": payload.get("reason"),
                             }
+                        elif ptype == "edit_started":
+                            yield f"data: {json.dumps(payload)}\n\n"
+                        elif ptype == "edit_result":
+                            # Full TipTap document + ops for CoreAPI / clients
+                            yield f"data: {json.dumps(payload, default=str)}\n\n"
                     continue
 
                 if mode == "error":
@@ -334,7 +346,15 @@ async def _stream_endpoint(
                 # Detect the moment the agent decides to call a tool and notify the client
                 if not status_sent and getattr(chunk, "tool_calls", None) and node == "agent":
                     status_sent = True
-                    yield f"data: {json.dumps({'type': 'status', 'message': status_message})}\n\n"
+                    tool_names = []
+                    for tc in chunk.tool_calls or []:
+                        name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
+                        if name:
+                            tool_names.append(name)
+                    msg = status_message
+                    if "apply_document_edit" in tool_names:
+                        msg = "Applying document edit…"
+                    yield f"data: {json.dumps({'type': 'status', 'message': msg})}\n\n"
 
                 if isinstance(chunk, ToolMessage):
                     tid = getattr(chunk, "tool_call_id", None) or chunk.id or ""
@@ -417,15 +437,23 @@ async def legal_agent_stream(request: ChatRequest):
 
 @app.post("/doc-agent/stream")
 async def doc_agent_stream(request: DocChatRequest):
-    """Hybrid document + law consultant agent.
+    """Hybrid document + law consultant agent (optional semantic edit).
 
     Requires ``doc_id`` — searches are scoped strictly to that document.
     Also searches the Ethiopian legal knowledge base for applicable law.
+    When ``doc_json`` is provided, the agent may call ``apply_document_edit``.
     """
+    enable_edit = isinstance(request.doc_json, dict) and request.doc_json.get("type") == "doc"
     try:
-        graph = get_doc_graph(request.doc_id)
+        graph = get_doc_graph(request.doc_id, enable_edit=enable_edit)
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
+
+    doc_lang = request.document_language
+    if not doc_lang and request.language:
+        doc_lang = (
+            request.language.value if hasattr(request.language, "value") else str(request.language)
+        )
 
     return await _stream_endpoint(
         ChatRequest(
@@ -435,4 +463,9 @@ async def doc_agent_stream(request: DocChatRequest):
         system_prompt=_apply_language(DOC_CONSULTANT_SYSTEM, request.language),
         graph=graph,
         status_message="Searching documents and legal knowledge base…",
+        extra_configurable={
+            "doc_id": request.doc_id,
+            "doc_json": request.doc_json if enable_edit else None,
+            "document_language": doc_lang,
+        },
     )

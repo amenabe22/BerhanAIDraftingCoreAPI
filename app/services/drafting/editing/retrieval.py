@@ -141,3 +141,47 @@ def neighbor_blocks(
             for j in range(max(0, idx - window), min(len(all_blocks), idx + window + 1)):
                 indices.add(j)
     return [all_blocks[i] for i in sorted(indices)]
+
+
+def _heading_level(block: dict[str, Any]) -> int:
+    attrs = block.get("attrs") or {}
+    level = attrs.get("level")
+    try:
+        return int(level) if level is not None else 2
+    except (TypeError, ValueError):
+        return 2
+
+
+def expand_section_blocks(
+    all_blocks: list[dict[str, Any]],
+    seed_ids: set[str],
+) -> set[str]:
+    """Expand heading seeds to the full section (heading + body until next peer heading).
+
+    For each seed block that is a heading, include every following block until a
+    heading of the same or higher level (lower/equal level number). Non-heading
+    seeds are kept as-is. Order of ``all_blocks`` must be document order.
+    """
+    if not all_blocks or not seed_ids:
+        return set(seed_ids)
+
+    id_to_index = {b["block_id"]: i for i, b in enumerate(all_blocks)}
+    expanded: set[str] = set(seed_ids)
+
+    for bid in list(seed_ids):
+        idx = id_to_index.get(bid)
+        if idx is None:
+            continue
+        block = all_blocks[idx]
+        if block.get("type") != "heading":
+            continue
+        level = _heading_level(block)
+        for j in range(idx + 1, len(all_blocks)):
+            nxt = all_blocks[j]
+            if nxt.get("type") == "heading" and _heading_level(nxt) <= level:
+                break
+            nxt_id = nxt.get("block_id")
+            if nxt_id:
+                expanded.add(nxt_id)
+
+    return expanded

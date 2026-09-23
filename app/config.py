@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     EDIT_SELECTOR_TOP_K: int = 10
     EDIT_MIN_CONFIDENCE: float = 0.55
     EDIT_MAX_REVISIONS: int = 2
+    # Soft cap on blocks included in section-expand edit context (0 = unlimited)
+    EDIT_SECTION_MAX_BLOCKS: int = 40
 
     # Redis (compliance result cache + diff anchoring)
     REDIS_URL: str = "redis://localhost:6379/0"
