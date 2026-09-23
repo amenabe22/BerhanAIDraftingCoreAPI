@@ -111,6 +111,8 @@ class GenerationAgent:
                     )
                     if chunk_content:
                         response_text += chunk_content
+                        if isinstance(chunk_content, str):
+                            await emitter.token(chunk_content)
                 if not response_text:
                     response = await llm.ainvoke([message])
                     response_text = (

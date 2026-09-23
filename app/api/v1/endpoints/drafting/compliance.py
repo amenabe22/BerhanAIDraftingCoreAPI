@@ -40,7 +40,7 @@ def _run_analysis(
         )
 
     check_level = request.check_level or "quick"
-    language = request.language or "en"
+    language = str(request.language.value if hasattr(request.language, "value") else (request.language or "en"))
     content_hash = compute_document_content_hash(blocks)
     cache_key = compliance_cache_key(
         content_hash=content_hash,

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,7 +19,11 @@ from app.services.export.contabo import (
     upload_bytes,
 )
 from app.services.export.docx_export import markdown_to_docx_bytes
-from app.services.export.pdf import markdown_to_pdf_bytes
+from app.services.export.pdf import (
+    INK,
+    build_paragraph_styles,
+    markdown_to_pdf_bytes,
+)
 from app.services.export.service import _safe_basename, export_document
 from app.services.export.tiptap_text import tiptap_to_markdown, validate_tiptap_document
 
@@ -254,12 +262,100 @@ def test_markdown_to_docx_empty_still_valid():
     assert data[:2] == b"PK"
 
 
+def test_docx_headings_are_larger_than_body():
+    from io import BytesIO
+
+    from docx import Document
+
+    data = markdown_to_docx_bytes("# MoyAts NDA\n\n## 1. Purpose\n\nBody clause text.")
+    doc = Document(BytesIO(data))
+    title, section, body = doc.paragraphs[0], doc.paragraphs[1], doc.paragraphs[2]
+    assert title.runs[0].font.size.pt >= 18
+    assert section.runs[0].font.size.pt >= 13
+    body_pt = body.runs[0].font.size.pt if body.runs[0].font.size else 11
+    assert title.runs[0].font.size.pt > body_pt
+
+
+def test_pdf_heading_styles_are_larger_than_body():
+    styles = build_paragraph_styles("Helvetica")
+    assert styles["title"].fontSize >= 18
+    assert styles["h2"].fontSize >= 13
+    assert styles["h2"].fontSize > styles["body"].fontSize
+    assert styles["h2"].spaceBefore >= 12
+    assert styles["title"].textColor == INK
+    assert styles["body"].textColor == INK
+
+
+def test_numbered_clause_titles_classify_as_headings():
+    from app.services.export.md_lines import classify_md_line
+
+    assert classify_md_line("1. Purpose") == "h2"
+    assert classify_md_line("## 1. Definitions") == "h2"
+    assert classify_md_line("1. The receiving party shall keep secrets.") == "ordered"
+
+
+def test_english_pdf_embeds_noto_sans():
+    pdf = markdown_to_pdf_bytes("# MoyAts NDA\n\n## 1. Purpose\n\nBody clause text.")
+    assert b"NotoSans" in pdf
+
+
+def test_docx_numbered_section_title_is_large():
+    from io import BytesIO
+
+    from docx import Document
+
+    data = markdown_to_docx_bytes("# MoyAts NDA\n\n1. Purpose\n\nBody clause text.")
+    doc = Document(BytesIO(data))
+    assert doc.paragraphs[1].runs[0].font.size.pt >= 13
+
+
 def test_pdf_and_docx_handle_amharic():
     md = tiptap_to_markdown(AMHARIC_DOC)
     pdf = markdown_to_pdf_bytes(md)
     docx = markdown_to_docx_bytes(md)
     assert pdf.startswith(b"%PDF")
     assert docx[:2] == b"PK"
+
+
+_MIXED_MD = (
+    "# MoyAts NDA\n\n"
+    "This agreement is between MoyAts PLC and Acme Trading PLC.\n\n"
+    "ይህ ስምምነት በ MoyAts PLC መካከል ነው።\n"
+)
+
+
+def test_pdf_embeds_truetype_for_latin_and_ethiopic():
+    """Helvetica-only PDFs render Ethiopic (and other Unicode) as black boxes."""
+    pdf = markdown_to_pdf_bytes(_MIXED_MD)
+    assert pdf.startswith(b"%PDF")
+    assert b"/FontFile2" in pdf
+
+
+def test_pdf_uses_ethiopic_lessan_for_amharic():
+    pdf = markdown_to_pdf_bytes(_MIXED_MD)
+    assert b"EthiopicLessan" in pdf
+
+
+def test_pdf_text_extracts_amharic_and_latin():
+    if not shutil.which("pdftotext"):
+        pytest.skip("pdftotext is required to assert extractable glyphs")
+    pdf = markdown_to_pdf_bytes(_MIXED_MD)
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as fh:
+        fh.write(pdf)
+        path = fh.name
+    try:
+        proc = subprocess.run(
+            ["pdftotext", "-enc", "UTF-8", path, "-"],
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        Path(path).unlink(missing_ok=True)
+    text = proc.stdout.decode("utf-8")
+    assert "MoyAts NDA" in text
+    assert "MoyAts PLC" in text
+    assert "ስምምነት" in text
+    assert "■" not in text
 
 
 # ── Filename sanitization ─────────────────────────────────────────────────────

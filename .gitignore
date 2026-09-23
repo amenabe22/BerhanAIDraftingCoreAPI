@@ -17,6 +17,8 @@ uv.lock
 
 # Environment variables (never commit secrets)
 .env
+.env.*
+_env*
 
 # Test / coverage artefacts
 .pytest_cache/

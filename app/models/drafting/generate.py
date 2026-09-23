@@ -154,7 +154,7 @@ class StructuredGenerateRequest(BaseModel):
     )
     language: LanguageField = Field(
         default=Language.english,
-        description='Document language: "en" | "am" (aliases: amh, amharic). Pins output language.',
+        description='Document language: "en" | "am" | "om" (aliases: amh, oro, oromo, afaan). Pins output language.',
     )
     model: SupportedModel | None = None
     enable_reasoning: bool = False

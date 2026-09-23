@@ -233,14 +233,9 @@ async def generate_stream(request: GenerateRequest) -> StreamingResponse:
                     analysis["language"] = language
                     thread_store.update_requirements(thread_id, pinned)
                 if analysis.get("ready_to_generate"):
+                    # Wait for action=finalize (green Start button). Do not auto-draft.
                     await emitter.ready_to_generate(
                         thread_id, analysis.get("response_message", "")
-                    )
-                    await _agent.generate_document(
-                        thread_id,
-                        emitter,
-                        model=request.model,
-                        enable_reasoning=request.enable_reasoning,
                     )
                 else:
                     await emitter.clarification_needed(
@@ -262,14 +257,9 @@ async def generate_stream(request: GenerateRequest) -> StreamingResponse:
                     file_url=request.file_url,
                 )
                 if result.get("ready_to_generate"):
+                    # Wait for action=finalize (green Start button). Do not auto-draft.
                     await emitter.ready_to_generate(
                         thread_id, result.get("response_message", "")
-                    )
-                    await _agent.generate_document(
-                        thread_id,
-                        emitter,
-                        model=request.model,
-                        enable_reasoning=request.enable_reasoning,
                     )
                 else:
                     await emitter.clarification_needed(
@@ -295,7 +285,6 @@ async def generate_stream(request: GenerateRequest) -> StreamingResponse:
                 elif state_now and language:
                     thread_store.update_requirements(thread_id, {"language": language})
 
-                await emitter.ready_to_generate(thread_id, "Generating document…")
                 await _agent.generate_document(
                     thread_id,
                     emitter,

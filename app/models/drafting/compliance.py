@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.drafting.generate import Language, LanguageField
+
 # ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
@@ -17,7 +19,10 @@ class ComplianceAnalysisRequest(BaseModel):
     """Input for POST /drafting/compliance/analyze. Document is loaded from the doc collection (Qdrant) by doc_id, with block_id and type per block for context."""
 
     doc_id: str = Field(description="Document ID in the doc collection (e.g. Qdrant doc_blocks).")
-    language: str = Field(default="en", description="Response language (e.g. en, am).")
+    language: LanguageField = Field(
+        default=Language.english,
+        description="Response language: en, am (Amharic), or om (Afaan Oromo).",
+    )
     check_level: Literal["quick", "standard", "deep"] = Field(
         default="quick",
         description="Analysis depth: quick (fastest), standard, or deep (most thorough).",

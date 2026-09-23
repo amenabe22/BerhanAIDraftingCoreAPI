@@ -55,3 +55,37 @@ CMD ["uvicorn", "app.main:app", \
      "--workers", "1", \
      "--log-level", "info", \
      "--no-access-log"]
+
+
+# ── MCP server (DocGen FastMCP HTTP) ──────────────────────────────────────────
+FROM python:3.10-slim AS mcp
+
+LABEL org.opencontainers.image.title="BerhanDocGenMCP"
+LABEL org.opencontainers.image.description="Berhan DocGen MCP HTTP server (wraps CoreAPI /drafting/generate)"
+
+RUN pip install --no-cache-dir uv \
+ && groupadd --gid 1001 appgroup \
+ && useradd  --uid 1001 --gid appgroup --no-create-home appuser
+
+WORKDIR /app
+
+COPY mcp/requirements.txt ./mcp/requirements.txt
+RUN uv pip install --system --no-cache -r mcp/requirements.txt
+
+COPY mcp/server.py mcp/docgen_client.py mcp/healthcheck.py ./mcp/
+
+RUN chown -R appuser:appgroup /app
+USER appuser
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MCP_HOST=0.0.0.0 \
+    MCP_PORT=8765 \
+    DOCGEN_API_URL=http://api:8000
+
+EXPOSE 8765
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "mcp/healthcheck.py"]
+
+CMD ["python", "mcp/server.py"]

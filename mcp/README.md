@@ -89,3 +89,32 @@ Opening `https://<sub>.ngrok-free.app/mcp` in a browser returns **401**. That is
 ```bash
 python -m pytest mcp/test_docgen_client.py -q
 ```
+
+## Production (docker compose)
+
+The same `docker-compose.yml` that runs CoreAPI also runs MCP as a second container. MCP talks to CoreAPI on the internal Docker network (`http://api:8000`), not via localhost.
+
+Put `MCP_SHARED_SECRET` in the repo-root `.env` (same file CoreAPI already uses). Do **not** keep the example `dev-docgen-secret` in production.
+
+```bash
+docker compose up -d --build
+```
+
+That starts:
+
+| Service | Container     | Inside Docker        | Host (this compose file) |
+| ------- | ------------- | -------------------- | ------------------------ |
+| CoreAPI | `berhan-api`  | `http://api:8000`    | `http://127.0.0.1:8080`  |
+| MCP     | `berhan-mcp`  | `http://mcp:8765/mcp`| `http://127.0.0.1:8765/mcp` |
+
+Clients (Inspector, `mcp/client_agent.py`, Cursor) should use the **public HTTPS** URL you put on nginx, not the raw host port:
+
+```
+https://mcp.example.com/mcp
+```
+
+Point nginx at `berhan-mcp:8765` on `proxy-net` (same pattern as CoreAPI on `berhan-api:8000`). MCP already sends `Authorization: Bearer <MCP_SHARED_SECRET>`; keep that secret on both the server `.env` and every remote client.
+
+Opening `/mcp` in a browser still returns **401**. That is expected.
+
+Do not tunnel CoreAPI. Do not run ngrok in production — use your existing nginx/TLS stack.

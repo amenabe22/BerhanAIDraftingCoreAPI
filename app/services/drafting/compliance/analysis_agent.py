@@ -21,6 +21,7 @@ from app.models.drafting.compliance import (
     LegalIssue,
 )
 from app.services.drafting.compliance.level_config import get_compliance_limits
+from app.services.generation.language import language_label, normalize_language_code
 from app.services.drafting.compliance.compliance_cache import (
     get_last_rubric_result,
     store_last_rubric_result,
@@ -881,10 +882,29 @@ Previous rubric evaluation (baseline — keep each item's status UNLESS the text
         blocks_limit=blocks_limit,
         block_char_limit=block_char_limit,
     )
+    lang = normalize_language_code(language)
+    if lang == "om":
+        lang_rule = (
+            f"Write summary, implications, recommendations, problem_summary, "
+            f"rewrite_directive, and suggested_text in Afaan Oromoo ({language_label(lang)}). "
+            f"Keep law names, article numbers, and citations in their original form. "
+            f'Set editor_fix.document_language to "om".'
+        )
+    elif lang == "am":
+        lang_rule = (
+            f"Write those narrative fields in Amharic (አማርኛ). "
+            f'Set editor_fix.document_language to "am".'
+        )
+    else:
+        lang_rule = (
+            "Write those narrative fields in English. "
+            'Set editor_fix.document_language to "en".'
+        )
     return f"""Analyze the following document for compliance with Ethiopian law. Output valid JSON only.
 
 Document type: {document_type}
-Language for response: {language}
+Language for response: {lang}
+RESPONSE LANGUAGE (CRITICAL): {lang_rule}
 
 RUBRIC EVALUATION (required — authoritative for scoring):
 For EACH rubric id below, return exactly one entry in "rubric_checks" with:
@@ -1135,6 +1155,7 @@ class ComplianceAnalysisAgent:
             blocks = extract_blocks_from_tiptap(tiptap_json) if tiptap_json else []
         if not full_text:
             raise ValueError("No document text to analyze")
+        language = normalize_language_code(language)
         _emit_progress(
             progress_callback,
             phase="prepare",
