@@ -17,10 +17,17 @@ services:
     env_file:
       - .env
 
-    # Override individual env vars here if needed (e.g. for local dev)
+    # Override individual env vars here if needed (e.g. for local dev).
+    # These win over .env, so the API uses the Qdrant service in this file.
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_VERIFY_SSL=false
+
+    depends_on:
+      qdrant:
+        condition: service_healthy
 
     healthcheck:
       test: ["CMD", "python", "-c",
@@ -49,6 +56,58 @@ services:
     networks:
       - berhan-net
       - proxy-net          # shared with the nginx/certbot stack
+
+  # ── Qdrant ──────────────────────────────────────────────────────────────────
+  # Pinned to the current stable release (v1.19.1, 4 Sep 2026).
+  # From the host:  http://localhost:6333  (dashboard at /dashboard)
+  # From the API:   http://qdrant:6333
+  # Run on its own: docker compose up -d qdrant
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    container_name: berhan-qdrant
+    restart: unless-stopped
+
+    ports:
+      - "6333:6333"   # REST API + web dashboard
+      - "6334:6334"   # gRPC
+
+    volumes:
+      - qdrant_storage:/qdrant/storage
+      - qdrant_snapshots:/qdrant/snapshots
+
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+
+    # Image is debian-slim (no curl). Bash /dev/tcp is enough to gate depends_on.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    networks:
+      - berhan-net
+
+volumes:
+  qdrant_storage:
+  qdrant_snapshots:
 
 networks:
   berhan-net:
