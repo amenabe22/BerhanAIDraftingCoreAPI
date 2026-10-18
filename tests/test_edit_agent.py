@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.drafting.editing.agent import SemanticEditAgent
-from app.services.drafting.editing.tiptap import extract_blocks_from_tiptap
+from app.services.drafting.editing.tiptap import resolve_document_blocks
 from tests.conftest import (
     make_mock_edit_ops,
     make_mock_locate_result,
@@ -41,7 +41,7 @@ async def test_global_replace_fast_path_no_llm(en_doc):
 
     assert set(result.keys()) >= CONTRACT_KEYS
     assert result["no_effective_change"] is False
-    blocks = extract_blocks_from_tiptap(result["document"])
+    blocks = resolve_document_blocks(result["document"])
     b2 = next(b for b in blocks if b["block_id"] == "b2")
     assert "thirty-five" in b2["text"]
 
@@ -52,7 +52,7 @@ async def test_locate_low_confidence_no_effective_change(en_doc):
     with (
         patch(
             "app.services.drafting.editing.agent.rank_blocks_for_instruction",
-            return_value=extract_blocks_from_tiptap(en_doc),
+            return_value=resolve_document_blocks(en_doc),
         ),
         patch(
             "app.services.drafting.editing.agent.edit_llm.complete_json",
@@ -64,13 +64,13 @@ async def test_locate_low_confidence_no_effective_change(en_doc):
         result = await agent.edit_document(en_doc, instruction="Make it better")
 
     assert result["no_effective_change"] is True
-    assert result["document"] == en_doc or extract_blocks_from_tiptap(result["document"]) == extract_blocks_from_tiptap(en_doc)
+    assert resolve_document_blocks(result["document"]) == resolve_document_blocks(en_doc)
 
 
 @pytest.mark.asyncio
 async def test_happy_path_edit_apply_verify(en_doc):
     agent = SemanticEditAgent()
-    blocks = extract_blocks_from_tiptap(en_doc)
+    blocks = resolve_document_blocks(en_doc)
 
     async def fake_complete_json(system: str, user: str):
         if "block selector" in system.lower() or "selector" in system.lower():
@@ -100,17 +100,17 @@ async def test_happy_path_edit_apply_verify(en_doc):
         )
 
     assert result["no_effective_change"] is False
-    assert result["document"]["type"] == "doc"
+    assert "blocks" in result["document"]
     assert len(result["operations"]) >= 1
-    b2 = next(b for b in extract_blocks_from_tiptap(result["document"]) if b["block_id"] == "b2")
+    b2 = next(b for b in resolve_document_blocks(result["document"]) if b["block_id"] == "b2")
     assert "thirty-five" in b2["text"]
-    assert len(extract_blocks_from_tiptap(result["document"])) == 3
+    assert len(resolve_document_blocks(result["document"])) == 3
 
 
 @pytest.mark.asyncio
 async def test_verify_revise_loop(en_doc):
     agent = SemanticEditAgent()
-    blocks = extract_blocks_from_tiptap(en_doc)
+    blocks = resolve_document_blocks(en_doc)
     edit_calls = {"n": 0}
 
     verify_calls = {"n": 0}
@@ -148,7 +148,7 @@ async def test_verify_revise_loop(en_doc):
 @pytest.mark.asyncio
 async def test_invalid_ops_safe_no_change(en_doc):
     agent = SemanticEditAgent()
-    blocks = extract_blocks_from_tiptap(en_doc)
+    blocks = resolve_document_blocks(en_doc)
 
     async def fake_complete_json(system: str, user: str):
         if "selector" in system.lower():
@@ -168,4 +168,4 @@ async def test_invalid_ops_safe_no_change(en_doc):
         result = await agent.edit_document(en_doc, instruction="Update clause")
 
     assert result["no_effective_change"] is True
-    assert len(extract_blocks_from_tiptap(result["document"])) == 3
+    assert len(resolve_document_blocks(result["document"])) == 3

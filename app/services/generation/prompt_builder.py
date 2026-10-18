@@ -13,165 +13,121 @@ class PromptBuilder:
 
     DOCUMENT_STRUCTURE_EXAMPLE_AMHARIC = """
 {
-  "type": "doc",
-  "content": [
+  "blocks": [
     {
-      "type": "page",
-      "content": [
-        {
-          "type": "heading",
-          "attrs": { "level": 1 },
-          "content": [
-            {
-              "type": "text",
-              "text": "የአጋርነት ስምምነት"
-            }
-          ]
-        },
-        {
-          "type": "paragraph",
-          "attrs": { "block_id": "b1" },
-          "content": [
-            {
-              "type": "text",
-              "text": "ይህ ስምምነት በዲሴምበር 1፣ 2025 የተፈጠረ ሲሆን በዴላዌር ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ኤ እና በካሊፎርኒያ ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ቢ መካከል ነው።"
-            }
-          ]
-        },
-        {
-          "type": "heading",
-          "attrs": { "level": 2 },
-          "content": [
-            {
-              "type": "text",
-              "text": "1. ዓላማ እና ወሰን"
-            }
-          ]
-        },
-        {
-          "type": "paragraph",
-          "attrs": { "block_id": "b2" },
-          "content": [
-            {
-              "type": "text",
-              "text": "የዚህ ስምምነት ዓላማ ሁለቱንም አጋሮች በአዲስ ምርቶች እና አገልግሎቶች ልማት፣ ገበያ እና ስርጭት ውስጥ በብቃት ለመተባበር የሚያስችላቸውን ማዕቀፍ ማቋቋም ነው።"
-            }
-          ]
-        }
-      ]
+      "id": "b1",
+      "type": "heading",
+      "index": 0,
+      "level": 1,
+      "html": "<h1>የአጋርነት ስምምነት</h1>",
+      "plain_text": "የአጋርነት ስምምነት"
     },
     {
-      "type": "pageBreak"
+      "id": "b2",
+      "type": "paragraph",
+      "index": 1,
+      "html": "<p>ይህ ስምምነት በዲሴምበር 1፣ 2025 የተፈጠረ ሲሆን በዴላዌር ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ኤ እና በካሊፎርኒያ ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ቢ መካከል ነው።</p>",
+      "plain_text": "ይህ ስምምነት በዲሴምበር 1፣ 2025 የተፈጠረ ሲሆን በዴላዌር ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ኤ እና በካሊፎርኒያ ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ቢ መካከል ነው።"
     },
     {
-      "type": "page",
-      "content": [
-        {
-          "type": "heading",
-          "attrs": { "level": 2 },
-          "content": [
-            {
-              "type": "text",
-              "text": "2. ግዴታዎች እና ኃላፊነቶች"
-            }
-          ]
-        },
-        {
-          "type": "paragraph",
-          "attrs": { "block_id": "b3" },
-          "content": [
-            {
-              "type": "text",
-              "text": "እያንዳንዱ አጋር የተወሰኑ ግዴታዎች እና ኃላፊነቶች ይኖሩታል።"
-            }
-          ]
-        }
-      ]
+      "id": "b3",
+      "type": "heading",
+      "index": 2,
+      "level": 2,
+      "html": "<h2>1. ዓላማ እና ወሰን</h2>",
+      "plain_text": "1. ዓላማ እና ወሰን"
+    },
+    {
+      "id": "b4",
+      "type": "paragraph",
+      "index": 3,
+      "html": "<p>የዚህ ስምምነት ዓላማ ሁለቱንም አጋሮች በአዲስ ምርቶች እና አገልግሎቶች ልማት፣ ገበያ እና ስርጭት ውስጥ በብቃት ለመተባበር የሚያስችላቸውን ማዕቀፍ ማቋቋም ነው።</p>",
+      "plain_text": "የዚህ ስምምነት ዓላማ ሁለቱንም አጋሮች በአዲስ ምርቶች እና አገልግሎቶች ልማት፣ ገበያ እና ስርጭት ውስጥ በብቃት ለመተባበር የሚያስችላቸውን ማዕቀፍ ማቋቋም ነው።"
+    },
+    {
+      "id": "b5",
+      "type": "heading",
+      "index": 4,
+      "level": 2,
+      "html": "<h2>2. ግዴታዎች እና ኃላፊነቶች</h2>",
+      "plain_text": "2. ግዴታዎች እና ኃላፊነቶች"
+    },
+    {
+      "id": "b6",
+      "type": "paragraph",
+      "index": 5,
+      "html": "<p>እያንዳንዱ አጋር የተወሰኑ ግዴታዎች እና ኃላፊነቶች ይኖሩታል።</p>",
+      "plain_text": "እያንዳንዱ አጋር የተወሰኑ ግዴታዎች እና ኃላፊነቶች ይኖሩታል።"
     }
-  ]
+  ],
+  "metadata": {
+    "document_type": "Partnership Agreement",
+    "title": "የአጋርነት ስምምነት",
+    "language": "am"
+  }
 }
 """
 
+
+
+
     DOCUMENT_STRUCTURE_EXAMPLE_ENGLISH = """
 {
-  "type": "doc",
-  "content": [
+  "blocks": [
     {
-      "type": "page",
-      "content": [
-        {
-          "type": "heading",
-          "attrs": { "level": 1 },
-          "content": [
-            {
-              "type": "text",
-              "text": "Partnership Agreement"
-            }
-          ]
-        },
-        {
-          "type": "paragraph",
-          "attrs": { "block_id": "b1" },
-          "content": [
-            {
-              "type": "text",
-              "text": "This agreement is entered into on December 1, 2025, between Company A, organized under Delaware law, and Company B, organized under California law."
-            }
-          ]
-        },
-        {
-          "type": "heading",
-          "attrs": { "level": 2 },
-          "content": [
-            {
-              "type": "text",
-              "text": "1. Purpose and Scope"
-            }
-          ]
-        },
-        {
-          "type": "paragraph",
-          "attrs": { "block_id": "b2" },
-          "content": [
-            {
-              "type": "text",
-              "text": "The purpose of this agreement is to establish a framework that enables both parties to collaborate effectively in the development, marketing, and distribution of innovative products and services."
-            }
-          ]
-        }
-      ]
+      "id": "b1",
+      "type": "heading",
+      "index": 0,
+      "level": 1,
+      "html": "<h1>Partnership Agreement</h1>",
+      "plain_text": "Partnership Agreement"
     },
     {
-      "type": "pageBreak"
+      "id": "b2",
+      "type": "paragraph",
+      "index": 1,
+      "html": "<p>This agreement is entered into on December 1, 2025, between Company A, organized under Delaware law, and Company B, organized under California law.</p>",
+      "plain_text": "This agreement is entered into on December 1, 2025, between Company A, organized under Delaware law, and Company B, organized under California law."
     },
     {
-      "type": "page",
-      "content": [
-        {
-          "type": "heading",
-          "attrs": { "level": 2 },
-          "content": [
-            {
-              "type": "text",
-              "text": "2. Obligations and Responsibilities"
-            }
-          ]
-        },
-        {
-          "type": "paragraph",
-          "attrs": { "block_id": "b3" },
-          "content": [
-            {
-              "type": "text",
-              "text": "Each party shall have specific obligations and responsibilities as outlined in this section."
-            }
-          ]
-        }
-      ]
+      "id": "b3",
+      "type": "heading",
+      "index": 2,
+      "level": 2,
+      "html": "<h2>1. Purpose and Scope</h2>",
+      "plain_text": "1. Purpose and Scope"
+    },
+    {
+      "id": "b4",
+      "type": "paragraph",
+      "index": 3,
+      "html": "<p>The purpose of this agreement is to establish a framework that enables both parties to collaborate effectively in the development, marketing, and distribution of innovative products and services.</p>",
+      "plain_text": "The purpose of this agreement is to establish a framework that enables both parties to collaborate effectively in the development, marketing, and distribution of innovative products and services."
+    },
+    {
+      "id": "b5",
+      "type": "heading",
+      "index": 4,
+      "level": 2,
+      "html": "<h2>2. Obligations and Responsibilities</h2>",
+      "plain_text": "2. Obligations and Responsibilities"
+    },
+    {
+      "id": "b6",
+      "type": "paragraph",
+      "index": 5,
+      "html": "<p>Each party shall have specific obligations and responsibilities as outlined in this section.</p>",
+      "plain_text": "Each party shall have specific obligations and responsibilities as outlined in this section."
     }
-  ]
+  ],
+  "metadata": {
+    "document_type": "Partnership Agreement",
+    "title": "Partnership Agreement",
+    "language": "en"
+  }
 }
 """
+
 
     def build_analysis_prompt(self, user_prompt: str, conversation_history: List[Dict[str, Any]], context: Dict[str, Any] = None) -> str:
         """Build prompt for analyzing user requirements."""
@@ -555,27 +511,24 @@ Generate a complete document matching this EXACT structure:
 {structure_example}
 
 IMPORTANT TECHNICAL REQUIREMENTS:
-1. Generate valid TipTap JSON format only
+1. Generate valid drafting-blocks JSON format only
 2. Match the EXACT structure shown above
-3. Document must have "type": "doc" at root
-4. Use "page" nodes separated by "pageBreak" nodes
-5. Every paragraph MUST have "attrs": {{"block_id": "bX"}} where X is a unique number
-6. Use "heading" nodes with "attrs": {{"level": 1-6}} for section titles
-7. Use "paragraph" nodes for text content
-8. Use "bulletList" and "listItem" for lists when appropriate
-9. All text must be in "text" nodes with "type": "text" and "text": "content"
+3. Document root MUST be an object with a "blocks" array
+4. Optionally include "metadata" with document_type, title, language
+5. Every block MUST have: id, type, index, html, plain_text
+6. Headings MUST include "level" (1-6)
+7. Use type "heading" for section titles and "paragraph" for body text
+8. Use type "bulletList" / "orderedList" for lists when appropriate
+9. html should be a simple HTML snippet; plain_text must match its text content
 10. Include all standard legal clauses and provisions relevant to the document type
 11. Use the legal knowledge provided above to ensure compliance and accuracy
 12. Make the document comprehensive, detailed, and legally sound
 
-TIPTAP STRUCTURE RULES:
-- Root: {{"type": "doc", "content": [...]}}
-- Page: {{"type": "page", "content": [...]}}
-- PageBreak: {{"type": "pageBreak"}}
-- Heading: {{"type": "heading", "attrs": {{"level": N}}, "content": [...]}}
-- Paragraph: {{"type": "paragraph", "attrs": {{"block_id": "bN"}}, "content": [...]}}
-- Text: {{"type": "text", "text": "your text here"}}
-- Assign sequential block_ids: b1, b2, b3, etc.
+DRAFTING BLOCK STRUCTURE RULES:
+- Root: {{"blocks": [...], "metadata": {{...}}}}
+- Block: {{"id": "bN", "type": "paragraph|heading|...", "index": N, "level": null|1-6, "html": "...", "plain_text": "..."}}
+- Assign sequential ids: b1, b2, b3, etc.
+- index must be 0-based and sequential
 
 CONTENT REQUIREMENTS:
 - Each page should be rich with detailed legal provisions
@@ -593,175 +546,115 @@ CONTENT REQUIREMENTS:
 📚 FEW-SHOT EXAMPLES - CORRECT JSON WITH PROPER COMMA PLACEMENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-EXAMPLE 1 - Correct comma placement between list items:
+EXAMPLE 1 - Correct comma placement between blocks:
 {{
-  "type": "doc",
-  "content": [
+  "blocks": [
     {{
-      "type": "page",
-      "content": [
-        {{
-          "type": "paragraph",
-          "attrs": {{"block_id": "b1"}},
-          "content": [{{"type": "text", "text": "First paragraph"}}]
-        }},
-        {{
-          "type": "paragraph",
-          "attrs": {{"block_id": "b2"}},
-          "content": [{{"type": "text", "text": "Second paragraph"}}]
-        }}
-      ]
+      "id": "b1",
+      "type": "paragraph",
+      "index": 0,
+      "html": "<p>First paragraph</p>",
+      "plain_text": "First paragraph"
+    }},
+    {{
+      "id": "b2",
+      "type": "paragraph",
+      "index": 1,
+      "html": "<p>Second paragraph</p>",
+      "plain_text": "Second paragraph"
     }}
   ]
 }}
 
 ✓ NOTICE: Comma after }} before next object
-✓ NOTICE: Comma after }} before closing ]
 
-EXAMPLE 2 - Correct comma placement in nested structures:
+EXAMPLE 2 - Heading + paragraph:
 {{
-  "type": "listItem",
-  "content": [
+  "blocks": [
     {{
-      "type": "paragraph",
-      "attrs": {{"block_id": "b10"}},
-      "content": [{{"type": "text", "text": "Item text"}}]
-    }}
-  ]
-}},
-{{
-  "type": "listItem",
-  "content": [
+      "id": "b1",
+      "type": "heading",
+      "index": 0,
+      "level": 1,
+      "html": "<h1>Document Title</h1>",
+      "plain_text": "Document Title"
+    }},
     {{
+      "id": "b2",
       "type": "paragraph",
-      "attrs": {{"block_id": "b11"}},
-      "content": [{{"type": "text", "text": "Another item"}}]
+      "index": 1,
+      "html": "<p>First paragraph text.</p>",
+      "plain_text": "First paragraph text."
     }}
-  ]
+  ],
+  "metadata": {{"language": "en", "title": "Document Title"}}
 }}
 
-✓ NOTICE: Comma after }} before next listItem
-✓ NOTICE: Comma after ] before next object
+✓ NOTICE: Comma after each block except the last
 
 EXAMPLE 3 - WRONG (missing comma - will cause parsing error):
 {{
+  "id": "b1",
   "type": "paragraph",
-  "attrs": {{"block_id": "b1"}},
-  "content": [{{"type": "text", "text": "Text"}}]
+  "index": 0,
+  "html": "<p>Text</p>",
+  "plain_text": "Text"
 }}
 {{
+  "id": "b2",
   "type": "paragraph",
-  "attrs": {{"block_id": "b2"}},
-  "content": [{{"type": "text", "text": "More text"}}]
+  "index": 1,
+  "html": "<p>More text</p>",
+  "plain_text": "More text"
 }}
 
 ❌ MISSING COMMA after first }} - this will FAIL parsing!
 
 EXAMPLE 4 - CORRECT (comma added):
 {{
+  "id": "b1",
   "type": "paragraph",
-  "attrs": {{"block_id": "b1"}},
-  "content": [{{"type": "text", "text": "Text"}}]
+  "index": 0,
+  "html": "<p>Text</p>",
+  "plain_text": "Text"
 }},
 {{
+  "id": "b2",
   "type": "paragraph",
-  "attrs": {{"block_id": "b2"}},
-  "content": [{{"type": "text", "text": "More text"}}]
+  "index": 1,
+  "html": "<p>More text</p>",
+  "plain_text": "More text"
 }}
 
 ✓ COMMA PRESENT after first }} - this will parse correctly!
 
-EXAMPLE 5 - WRONG (missing comma after closing brace in array):
+EXAMPLE 5 - Complete valid drafting-blocks document:
 {{
-  "type": "listItem",
-  "content": [
+  "blocks": [
     {{
-      "type": "paragraph",
-      "attrs": {{"block_id": "b10"}},
-      "content": [{{"type": "text", "text": "Item 1"}}]
-    }}
-  ]
-}}
-{{
-  "type": "listItem",
-  "content": [
-    {{
-      "type": "paragraph",
-      "attrs": {{"block_id": "b11"}},
-      "content": [{{"type": "text", "text": "Item 2"}}]
-    }}
-  ]
-}}
-
-❌ MISSING COMMA after first }} - this will cause "Expecting ',' delimiter" error!
-
-EXAMPLE 6 - CORRECT (comma added after closing brace):
-{{
-  "type": "listItem",
-  "content": [
-    {{
-      "type": "paragraph",
-      "attrs": {{"block_id": "b10"}},
-      "content": [{{"type": "text", "text": "Item 1"}}]
-    }}
-  ]
-}},
-{{
-  "type": "listItem",
-  "content": [
-    {{
-      "type": "paragraph",
-      "attrs": {{"block_id": "b11"}},
-      "content": [{{"type": "text", "text": "Item 2"}}]
-    }}
-  ]
-}}
-
-✓ COMMA PRESENT after first }} - this will parse correctly!
-
-EXAMPLE 7 - Complete valid TipTap document structure:
-{{
-  "type": "doc",
-  "content": [
-    {{
-      "type": "page",
-      "content": [
-        {{
-          "type": "heading",
-          "attrs": {{"level": 1}},
-          "content": [{{"type": "text", "text": "Document Title"}}]
-        }},
-        {{
-          "type": "paragraph",
-          "attrs": {{"block_id": "b1"}},
-          "content": [{{"type": "text", "text": "First paragraph text."}}]
-        }},
-        {{
-          "type": "paragraph",
-          "attrs": {{"block_id": "b2"}},
-          "content": [{{"type": "text", "text": "Second paragraph text."}}]
-        }}
-      ]
+      "id": "b1",
+      "type": "heading",
+      "index": 0,
+      "level": 1,
+      "html": "<h1>Document Title</h1>",
+      "plain_text": "Document Title"
     }},
     {{
-      "type": "pageBreak"
+      "id": "b2",
+      "type": "paragraph",
+      "index": 1,
+      "html": "<p>First paragraph text.</p>",
+      "plain_text": "First paragraph text."
     }},
     {{
-      "type": "page",
-      "content": [
-        {{
-          "type": "heading",
-          "attrs": {{"level": 2}},
-          "content": [{{"type": "text", "text": "Section Title"}}]
-        }},
-        {{
-          "type": "paragraph",
-          "attrs": {{"block_id": "b3"}},
-          "content": [{{"type": "text", "text": "More content."}}]
-        }}
-      ]
+      "id": "b3",
+      "type": "paragraph",
+      "index": 2,
+      "html": "<p>Second paragraph text.</p>",
+      "plain_text": "Second paragraph text."
     }}
-  ]
+  ],
+  "metadata": {{"document_type": "Contract", "title": "Document Title", "language": "en"}}
 }}
 
 ✓ NOTICE: Every }} or ]] that is NOT the last element has a comma after it
@@ -772,7 +665,7 @@ EXAMPLE 7 - Complete valid TipTap document structure:
 CRITICAL REMINDER: After EVERY }} or ]] that is NOT the last element, add a comma!
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Respond with ONLY the JSON document structure, no additional text. Start with {{ and end with }} - pure JSON only.
+Respond with ONLY the drafting-blocks JSON document, no additional text. Start with {{ and end with }} - pure JSON only.
 """
         return prompt + final_language_reminder
 
@@ -976,8 +869,8 @@ or missing mandatory clauses. Ensure ALL clauses comply with Ethiopian legal fra
 
 PROPERTY NAME QUOTES (CRITICAL - MOST COMMON ERROR):
 ✓ EVERY property name MUST have BOTH opening and closing double quotes
-✓ CORRECT: "type": "doc", "content": [...], "attrs": {...}
-✓ WRONG: type": "doc" (missing opening quote)
+✓ CORRECT: "blocks": [...], "metadata": {...}
+✓ WRONG: blocks": [...] (missing opening quote)
 ✓ WRONG: content": [...] (missing opening quote)
 ✓ WRONG: attrs": {...} (missing opening quote)
 ✓ Pattern: "property_name": value (opening quote + name + closing quote + colon)
@@ -1071,7 +964,7 @@ VALIDATION CHECKLIST - VERIFY BEFORE OUTPUTTING:
 
 COMMON ERRORS TO AVOID:
 ❌ content": [...] → ✓ "content": [...]
-❌ type": "doc" → ✓ "type": "doc"
+❌ blocks": → ✓ "blocks":
 ❌ attrs": {...} → ✓ "attrs": {...}
 ❌ "text": "Unescaped "quote" here" → ✓ "text": "Escaped \\"quote\\" here"
 ❌ "key": "value",} → ✓ "key": "value"}

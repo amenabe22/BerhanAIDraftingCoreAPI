@@ -103,7 +103,7 @@ def _extract_text_from_tiptap_node(node: dict) -> str:
 
 
 def extract_blocks_from_tiptap(tiptap_json: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract blocks (paragraphs/sections) with block_id and text from TipTap JSON.
+    """Legacy: extract blocks (paragraphs/sections) with block_id and text from TipTap JSON.
 
     Handles multi-page document structure (page nodes wrapping paragraphs/headings)
     and reads all common block-id attribute variants used across the codebase:
@@ -143,15 +143,38 @@ def extract_blocks_from_tiptap(tiptap_json: dict[str, Any]) -> list[dict[str, An
     return blocks
 
 
+def _normalize_incoming_blocks(blocks: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Normalize drafting blocks or Qdrant blocks to {block_id, type, text}."""
+    out: list[dict[str, Any]] = []
+    for i, block in enumerate(blocks or []):
+        if not isinstance(block, dict):
+            continue
+        bid = block.get("block_id") or block.get("id") or f"b{i}"
+        text = (block.get("text") or block.get("plain_text") or "").strip()
+        out.append(
+            {
+                **block,
+                "block_id": bid,
+                "type": block.get("type") or "paragraph",
+                "text": text,
+            }
+        )
+    return out
+
+
 def _extract_full_document_text(
-    tiptap_json: dict[str, Any] | None, document_text: str | None
+    tiptap_json: dict[str, Any] | None,
+    document_text: str | None,
+    blocks: list[dict[str, Any]] | None = None,
 ) -> str:
-    """Return full document text from TipTap or plain document_text."""
+    """Return full document text preferring blocks, then TipTap, then plain text."""
+    if blocks:
+        return "\n\n".join(b.get("text", "") for b in blocks if b.get("text"))
     if document_text:
         return document_text.strip()
     if tiptap_json:
-        blocks = extract_blocks_from_tiptap(tiptap_json)
-        return "\n\n".join(b.get("text", "") for b in blocks if b.get("text"))
+        extracted = extract_blocks_from_tiptap(tiptap_json)
+        return "\n\n".join(b.get("text", "") for b in extracted if b.get("text"))
     return ""
 
 
@@ -1148,11 +1171,18 @@ class ComplianceAnalysisAgent:
         When doc_id is provided, diff-aware anchoring reuses prior rubric statuses for unchanged blocks.
         """
         if document_blocks:
-            blocks = document_blocks
-            full_text = "\n\n".join(b.get("text", "") for b in blocks if b.get("text"))
+            blocks = _normalize_incoming_blocks(document_blocks)
+            full_text = _extract_full_document_text(None, document_text, blocks)
+        elif tiptap_json and isinstance(tiptap_json.get("blocks"), list):
+            blocks = _normalize_incoming_blocks(tiptap_json["blocks"])
+            full_text = _extract_full_document_text(None, document_text, blocks)
         else:
-            full_text = _extract_full_document_text(tiptap_json, document_text)
-            blocks = extract_blocks_from_tiptap(tiptap_json) if tiptap_json else []
+            blocks = (
+                _normalize_incoming_blocks(extract_blocks_from_tiptap(tiptap_json))
+                if tiptap_json
+                else []
+            )
+            full_text = _extract_full_document_text(tiptap_json, document_text, blocks or None)
         if not full_text:
             raise ValueError("No document text to analyze")
         language = normalize_language_code(language)

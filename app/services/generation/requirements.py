@@ -60,7 +60,7 @@ def build_synthetic_prompt(request: StructuredGenerateRequest, requirements: dic
         f"Generate a complete {requirements.get('document_type', request.doc_type)} document.",
         (
             f"OUTPUT LANGUAGE (mandatory): {language_label(lang)}. "
-            f'The TipTap metadata.language field MUST be "{lang}". '
+            f'The metadata.language field MUST be "{lang}". '
             "Write all generated legal text in that language."
         ),
     ]

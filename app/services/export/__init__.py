@@ -1,4 +1,4 @@
-"""Document export services (TipTap → Contabo PDF/DOCX URLs)."""
+"""Document export services (drafting blocks → Contabo PDF/DOCX URLs)."""
 
 from app.services.export.service import export_document
 

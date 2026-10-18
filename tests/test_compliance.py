@@ -146,6 +146,29 @@ def test_extract_full_document_text_plain():
     assert _extract_full_document_text(None, "  x  ") == "x"
 
 
+
+
+def test_prefer_blocks_list_for_document_text():
+    from app.services.drafting.compliance.analysis_agent import (
+        _extract_full_document_text,
+        _normalize_incoming_blocks,
+    )
+
+    blocks = _normalize_incoming_blocks(
+        [
+            {"id": "b1", "type": "paragraph", "plain_text": "From blocks"},
+            {"id": "b2", "type": "paragraph", "plain_text": "Second"},
+        ]
+    )
+    text = _extract_full_document_text(
+        {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "From TipTap"}]}]},
+        None,
+        blocks,
+    )
+    assert "From blocks" in text
+    assert "From TipTap" not in text
+
+
 def test_extract_full_document_text_from_tiptap():
     from app.services.drafting.compliance.analysis_agent import _extract_full_document_text
 

@@ -13,7 +13,7 @@ from tests.fixtures.tiptap_docs import make_en_doc
 def test_edit_request_validation_missing_instruction():
     client = TestClient(app)
     doc = make_en_doc()
-    r = client.post("/drafting/edit", json={"doc_json": doc})
+    r = client.post("/drafting/edit", json={"blocks": doc["blocks"]})
     assert r.status_code == 422
 
 
@@ -87,3 +87,27 @@ async def test_edit_endpoint_success_with_mocked_agent(client, en_doc):
     data = r.json()
     assert data["no_effective_change"] is False
     assert len(data["operations"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_edit_accepts_blocks_field(client, en_doc):
+    mock_result = {
+        "document": en_doc,
+        "blocks": en_doc["blocks"],
+        "diff": "No changes",
+        "operations": [],
+        "metrics": {},
+        "operation_id": "abc12345",
+        "no_effective_change": True,
+        "no_effective_change_reason": "test",
+    }
+    with patch("app.api.v1.endpoints.drafting.edit._get_agent") as mock_get_agent:
+        agent = AsyncMock()
+        agent.edit_document = AsyncMock(return_value=mock_result)
+        mock_get_agent.return_value = agent
+        r = await client.post(
+            "/drafting/edit",
+            json={"blocks": en_doc["blocks"], "instruction": "test edit", "document_language": "en"},
+        )
+    assert r.status_code == 200
+    assert r.json()["operation_id"] == "abc12345"

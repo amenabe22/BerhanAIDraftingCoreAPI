@@ -111,7 +111,7 @@ class ClauseAnalysis(BaseModel):
     text: str = Field(description="Clause text or summary.")
     risk_level: str = Field(description="LOW | MEDIUM | HIGH | CRITICAL")
     implications: str = Field(default="", description="Legal implications.")
-    block_id: str | None = Field(default=None, description="Mapped block id if from TipTap.")
+    block_id: str | None = Field(default=None, description="Mapped drafting block id.")
     citations: list[LegalCitation] = Field(default_factory=list)
     ethiopian_law_implications: list[str] = Field(
         default_factory=list,

@@ -1,4 +1,4 @@
-"""Orchestrate TipTap → PDF/DOCX → Contabo upload."""
+"""Orchestrate drafting blocks → PDF/DOCX → Contabo upload."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from app.logging_config import get_logger
 from app.services.export.contabo import ContaboNotConfiguredError, contabo_configured, upload_bytes
 from app.services.export.docx_export import markdown_to_docx_bytes
 from app.services.export.pdf import markdown_to_pdf_bytes
-from app.services.export.tiptap_text import tiptap_to_markdown, validate_tiptap_document
+from app.services.export.blocks_text import blocks_to_markdown, validate_blocks_document
 
 log = get_logger("export_service")
 
@@ -37,13 +37,22 @@ def _safe_basename(filename: str | None) -> str:
 
 
 def export_document(
-    document: dict[str, Any],
+    document: dict[str, Any] | list[Any] | None = None,
     *,
+    blocks: list[Any] | None = None,
     formats: list[ExportFormat] | None = None,
     filename: str | None = None,
 ) -> dict[str, Any]:
-    """Convert TipTap doc and upload requested formats. Returns URLs + keys."""
-    validate_tiptap_document(document)
+    """Convert drafting blocks (or legacy TipTap) and upload. Returns URLs + keys."""
+    payload: Any
+    if blocks is not None:
+        payload = blocks
+    elif document is not None:
+        payload = document
+    else:
+        raise ValueError("Provide blocks or document")
+
+    validate_blocks_document(payload)
     if not contabo_configured():
         raise ContaboNotConfiguredError(
             "Contabo/S3 is not configured. Set S3_ENDPOINT_URL, "
@@ -58,7 +67,7 @@ def export_document(
     if not unique:
         raise ValueError('formats must include at least one of "pdf" or "docx"')
 
-    markdown = tiptap_to_markdown(document)
+    markdown = blocks_to_markdown(payload)
     if not markdown.strip():
         raise ValueError("document has no exportable text content")
 

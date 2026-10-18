@@ -1,4 +1,4 @@
-"""Unit tests for TipTap → Contabo PDF/DOCX export."""
+"""Unit tests for drafting-blocks → Contabo PDF/DOCX export."""
 
 from __future__ import annotations
 
@@ -25,9 +25,37 @@ from app.services.export.pdf import (
     markdown_to_pdf_bytes,
 )
 from app.services.export.service import _safe_basename, export_document
+from app.services.export.blocks_text import blocks_to_markdown, validate_blocks_document
 from app.services.export.tiptap_text import tiptap_to_markdown, validate_tiptap_document
 
 SAMPLE_DOC = {
+    "blocks": [
+        {
+            "id": "b1",
+            "type": "heading",
+            "index": 0,
+            "level": 1,
+            "html": "<h1>NDA</h1>",
+            "plain_text": "NDA",
+        },
+        {
+            "id": "b2",
+            "type": "paragraph",
+            "index": 1,
+            "html": "<p>This agreement is between Acme and Beta.</p>",
+            "plain_text": "This agreement is between Acme and Beta.",
+        },
+        {
+            "id": "b3",
+            "type": "bulletList",
+            "index": 2,
+            "html": "<ul><li>Confidentiality</li></ul>",
+            "plain_text": "Confidentiality",
+        },
+    ]
+}
+
+LEGACY_TIPTAP_DOC = {
     "type": "doc",
     "content": [
         {
@@ -40,12 +68,7 @@ SAMPLE_DOC = {
                 },
                 {
                     "type": "paragraph",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "This agreement is between Acme and Beta.",
-                        }
-                    ],
+                    "content": [{"type": "text", "text": "This agreement is between Acme and Beta."}],
                 },
                 {
                     "type": "bulletList",
@@ -67,93 +90,70 @@ SAMPLE_DOC = {
 }
 
 RICH_DOC = {
-    "type": "doc",
-    "content": [
+    "blocks": [
         {
-            "type": "page",
-            "content": [
-                {
-                    "type": "heading",
-                    "attrs": {"level": 2},
-                    "content": [{"type": "text", "text": "Obligations"}],
-                },
-                {
-                    "type": "orderedList",
-                    "content": [
-                        {
-                            "type": "listItem",
-                            "content": [
-                                {
-                                    "type": "paragraph",
-                                    "content": [{"type": "text", "text": "Keep secrets"}],
-                                }
-                            ],
-                        },
-                        {
-                            "type": "listItem",
-                            "content": [
-                                {
-                                    "type": "paragraph",
-                                    "content": [{"type": "text", "text": "Return materials"}],
-                                }
-                            ],
-                        },
-                    ],
-                },
-                {
-                    "type": "blockquote",
-                    "content": [
-                        {
-                            "type": "paragraph",
-                            "content": [{"type": "text", "text": "Quoted clause"}],
-                        }
-                    ],
-                },
-            ],
+            "id": "b1",
+            "type": "heading",
+            "index": 0,
+            "level": 2,
+            "html": "<h2>Obligations</h2>",
+            "plain_text": "Obligations",
         },
-        {"type": "pageBreak"},
         {
-            "type": "page",
-            "content": [
-                {
-                    "type": "paragraph",
-                    "content": [{"type": "text", "text": "Page two body"}],
-                }
-            ],
+            "id": "b2",
+            "type": "orderedList",
+            "index": 1,
+            "html": "<ol><li>Keep secrets</li><li>Return materials</li></ol>",
+            "plain_text": "Keep secrets\nReturn materials",
         },
-    ],
+        {
+            "id": "b3",
+            "type": "blockquote",
+            "index": 2,
+            "html": "<blockquote>Quoted clause</blockquote>",
+            "plain_text": "Quoted clause",
+        },
+        {
+            "id": "pb1",
+            "type": "pageBreak",
+            "index": 3,
+            "html": "",
+            "plain_text": "",
+        },
+        {
+            "id": "b4",
+            "type": "paragraph",
+            "index": 4,
+            "html": "<p>Page two body</p>",
+            "plain_text": "Page two body",
+        },
+    ]
 }
 
 AMHARIC_DOC = {
-    "type": "doc",
-    "content": [
+    "blocks": [
         {
-            "type": "page",
-            "content": [
-                {
-                    "type": "heading",
-                    "attrs": {"level": 1},
-                    "content": [{"type": "text", "text": "ስምምነት"}],
-                },
-                {
-                    "type": "paragraph",
-                    "content": [{"type": "text", "text": "ይህ ስምምነት በሁለት ወገኖች መካከል ነው።"}],
-                },
-            ],
-        }
-    ],
+            "id": "b1",
+            "type": "heading",
+            "index": 0,
+            "level": 1,
+            "html": "<h1>ስምምነት</h1>",
+            "plain_text": "ስምምነት",
+        },
+        {
+            "id": "b2",
+            "type": "paragraph",
+            "index": 1,
+            "html": "<p>ይህ ስምምነት ነው።</p>",
+            "plain_text": "ይህ ስምምነት ነው።",
+        },
+    ]
 }
 
 EMPTY_TEXT_DOC = {
-    "type": "doc",
-    "content": [
-        {
-            "type": "page",
-            "content": [
-                {"type": "paragraph", "content": [{"type": "text", "text": "   "}]},
-            ],
-        }
-    ],
+    "blocks": [
+        {"id": "b1", "type": "paragraph", "index": 0, "html": "", "plain_text": ""}
+    ]
 }
 
 
@@ -186,38 +186,37 @@ def test_export_route_in_openapi(client: TestClient):
 # ── TipTap validation ─────────────────────────────────────────────────────────
 
 
-def test_validate_tiptap_ok():
-    validate_tiptap_document(SAMPLE_DOC)  # no raise
+def test_validate_blocks_ok():
+    validate_blocks_document(SAMPLE_DOC)  # no raise
 
 
 @pytest.mark.parametrize(
     "doc",
     [
+        {},
+        {"blocks": []},
+        {"blocks": "oops"},
         {"type": "paragraph"},
-        {"type": "doc", "content": []},
-        {"type": "doc"},
-        "not-a-dict",
-        None,
-        {"type": "doc", "content": "oops"},
+        {"foo": 1},
     ],
 )
-def test_validate_tiptap_rejects_bad(doc):
+def test_validate_blocks_rejects_bad(doc):
     with pytest.raises(ValueError):
-        validate_tiptap_document(doc)
+        validate_blocks_document(doc)
 
 
 # ── TipTap → markdown ─────────────────────────────────────────────────────────
 
 
-def test_tiptap_to_markdown_basic():
-    md = tiptap_to_markdown(SAMPLE_DOC)
+def test_blocks_to_markdown_basic():
+    md = blocks_to_markdown(SAMPLE_DOC)
     assert "# NDA" in md
     assert "Acme and Beta" in md
     assert "- Confidentiality" in md
 
 
-def test_tiptap_to_markdown_rich():
-    md = tiptap_to_markdown(RICH_DOC)
+def test_blocks_to_markdown_rich():
+    md = blocks_to_markdown(RICH_DOC)
     assert "## Obligations" in md
     assert "1. Keep secrets" in md
     assert "2. Return materials" in md
@@ -226,15 +225,15 @@ def test_tiptap_to_markdown_rich():
     assert "Page two body" in md
 
 
-def test_tiptap_to_markdown_amharic():
-    md = tiptap_to_markdown(AMHARIC_DOC)
+def test_blocks_to_markdown_amharic():
+    md = blocks_to_markdown(AMHARIC_DOC)
     assert "ስምምነት" in md
-    assert "ወገኖች" in md
+    assert "ይህ ስምምነት ነው።" in md
 
 
-def test_tiptap_to_markdown_rejects_non_object():
+def test_blocks_to_markdown_rejects_empty():
     with pytest.raises(ValueError):
-        tiptap_to_markdown([])  # type: ignore[arg-type]
+        blocks_to_markdown([])  # type: ignore[arg-type]
 
 
 # ── PDF / DOCX converters ─────────────────────────────────────────────────────
@@ -310,7 +309,7 @@ def test_docx_numbered_section_title_is_large():
 
 
 def test_pdf_and_docx_handle_amharic():
-    md = tiptap_to_markdown(AMHARIC_DOC)
+    md = blocks_to_markdown(AMHARIC_DOC)
     pdf = markdown_to_pdf_bytes(md)
     docx = markdown_to_docx_bytes(md)
     assert pdf.startswith(b"%PDF")
@@ -549,7 +548,7 @@ def test_export_endpoint_503_when_unconfigured(client: TestClient):
 def test_export_endpoint_400_invalid_document(client: TestClient, mock_upload):
     r = client.post(
         "/drafting/export",
-        json={"document": {"type": "doc", "content": []}, "formats": ["pdf"]},
+        json={"document": {"blocks": []}, "formats": ["pdf"]},
     )
     assert r.status_code == 400
 
@@ -609,3 +608,9 @@ def test_export_endpoint_500_on_upload_failure(client: TestClient):
         )
     assert r.status_code == 500
     assert "Export failed" in r.json()["detail"]
+
+
+def test_legacy_tiptap_still_converts():
+    md = tiptap_to_markdown(LEGACY_TIPTAP_DOC)
+    assert "NDA" in md
+    validate_tiptap_document(LEGACY_TIPTAP_DOC)

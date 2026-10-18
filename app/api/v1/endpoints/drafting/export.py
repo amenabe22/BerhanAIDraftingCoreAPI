@@ -1,4 +1,4 @@
-"""TipTap export endpoint: POST /export → Contabo PDF/DOCX URLs."""
+"""Drafting-block export endpoint: POST /export → Contabo PDF/DOCX URLs."""
 
 from __future__ import annotations
 
@@ -16,11 +16,12 @@ router = APIRouter(prefix="/export", tags=["export"])
 
 @router.post("", response_model=ExportResponse)
 @router.post("/", response_model=ExportResponse, include_in_schema=False)
-async def export_tiptap(request: ExportRequest) -> ExportResponse:
-    """Convert TipTap JSON to PDF and/or DOCX, upload to Contabo, return URLs."""
+async def export_document_endpoint(request: ExportRequest) -> ExportResponse:
+    """Convert drafting blocks (or legacy TipTap) to PDF/DOCX, upload to Contabo."""
     try:
         result = export_document(
             request.document,
+            blocks=request.blocks,
             formats=request.formats,
             filename=request.filename,
         )

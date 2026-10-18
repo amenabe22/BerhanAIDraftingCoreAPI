@@ -113,9 +113,11 @@ def validate_operations(json_data: dict[str, Any]) -> tuple[bool, str | None]:
 
 
 def validate_block_exists(doc_json: dict[str, Any], block_id: str) -> bool:
-    from app.services.drafting.editing.tiptap import find_block_by_id
+    from app.services.drafting.editing.tiptap import find_block_by_id, resolve_document_blocks
 
-    return find_block_by_id(doc_json, block_id) is not None
+    if find_block_by_id(doc_json, block_id) is not None:
+        return True
+    return any(b.get("block_id") == block_id for b in resolve_document_blocks(doc_json))
 
 
 def generate_fallback_operation(

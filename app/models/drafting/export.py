@@ -1,12 +1,23 @@
-"""Request/response models for TipTap export."""
+"""Request/response models for drafting-block export."""
 
-from typing import Literal
+from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, model_validator
+
+from app.models.drafting.blocks import DraftingBlock
 
 
 class ExportRequest(BaseModel):
-    document: dict = Field(..., description="TipTap JSON document ({type: doc, content: [...]})")
+    blocks: list[DraftingBlock] | list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Drafting blocks ({id, type, index, level?, html, plain_text})",
+    )
+    document: dict[str, Any] | None = Field(
+        default=None,
+        description="Blocks envelope {blocks:[...]} or legacy TipTap {type:doc, content:[...]}",
+    )
     formats: list[Literal["pdf", "docx"]] = Field(
         default_factory=lambda: ["pdf", "docx"],
         description="Formats to generate and upload",
@@ -15,6 +26,12 @@ class ExportRequest(BaseModel):
         default=None,
         description="Base filename without extension",
     )
+
+    @model_validator(mode="after")
+    def _require_blocks_or_document(self) -> ExportRequest:
+        if self.blocks is None and self.document is None:
+            raise ValueError("Provide blocks or document")
+        return self
 
 
 class ExportResponse(BaseModel):

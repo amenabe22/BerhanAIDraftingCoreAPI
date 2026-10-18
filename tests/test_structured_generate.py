@@ -20,24 +20,25 @@ from app.services.generation.requirements import (
     build_synthetic_prompt,
 )
 
-SAMPLE_TIPTAP = {
-    "type": "doc",
-    "content": [
+SAMPLE_BLOCKS = {
+    "blocks": [
         {
-            "type": "page",
-            "content": [
-                {
-                    "type": "heading",
-                    "attrs": {"level": 1},
-                    "content": [{"type": "text", "text": "NDA"}],
-                },
-                {
-                    "type": "paragraph",
-                    "content": [{"type": "text", "text": "Confidentiality terms."}],
-                },
-            ],
-        }
+            "id": "b1",
+            "type": "heading",
+            "index": 0,
+            "level": 1,
+            "html": "<h1>NDA</h1>",
+            "plain_text": "NDA",
+        },
+        {
+            "id": "b2",
+            "type": "paragraph",
+            "index": 1,
+            "html": "<p>Confidentiality terms.</p>",
+            "plain_text": "Confidentiality terms.",
+        },
     ],
+    "metadata": {"language": "en", "title": "NDA"},
 }
 
 VALID_METADATA = {
@@ -187,8 +188,8 @@ def test_structured_generate_passes_metadata_json_and_language(client: TestClien
     async def fake_gen(thread_id, emitter, **kwargs):
         captured["requirements"] = kwargs.get("requirements")
         captured["synthetic_prompt"] = kwargs.get("synthetic_prompt")
-        await emitter.document_generated(thread_id, SAMPLE_TIPTAP, metadata={})
-        return dict(SAMPLE_TIPTAP)
+        await emitter.document_generated(thread_id, SAMPLE_BLOCKS, metadata={})
+        return dict(SAMPLE_BLOCKS)
 
     with (
         patch(
@@ -243,8 +244,8 @@ def test_structured_accepts_amh_language_alias(client: TestClient):
 
     async def fake_gen(thread_id, emitter, **kwargs):
         captured["requirements"] = kwargs.get("requirements")
-        await emitter.document_generated(thread_id, SAMPLE_TIPTAP, metadata={})
-        return dict(SAMPLE_TIPTAP)
+        await emitter.document_generated(thread_id, SAMPLE_BLOCKS, metadata={})
+        return dict(SAMPLE_BLOCKS)
 
     with (
         patch(
@@ -272,8 +273,8 @@ def test_structured_accepts_amh_language_alias(client: TestClient):
 
 def test_structured_export_skipped_when_contabo_missing(client: TestClient):
     async def fake_gen(thread_id, emitter, **kwargs):
-        await emitter.document_generated(thread_id, SAMPLE_TIPTAP, metadata={})
-        return dict(SAMPLE_TIPTAP)
+        await emitter.document_generated(thread_id, SAMPLE_BLOCKS, metadata={})
+        return dict(SAMPLE_BLOCKS)
 
     with (
         patch(

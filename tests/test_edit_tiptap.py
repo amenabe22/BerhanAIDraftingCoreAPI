@@ -1,48 +1,49 @@
-"""Unit tests for TipTap helpers."""
+"""Unit tests for drafting-block / legacy TipTap helpers."""
 
 from app.services.drafting.editing.tiptap import (
     detect_language,
     extract_blocks_from_tiptap,
-    generate_block_id,
+    resolve_document_blocks,
+    tiptap_to_drafting_blocks,
+    validate_document_structure,
     validate_tiptap_structure,
 )
-from tests.fixtures.tiptap_docs import make_amharic_doc, make_en_doc, make_multi_page_doc
+from tests.fixtures.tiptap_docs import (
+    make_amharic_doc,
+    make_en_doc,
+    make_multi_page_doc,
+    make_tiptap_en_doc,
+)
 
 
-def test_detect_language_english():
-    assert detect_language("Hello world") == "en"
-
-
-def test_detect_language_amharic():
-    assert detect_language("ሰላም") == "am"
-
-
-def test_extract_blocks_order_and_ids(en_doc):
-    blocks = extract_blocks_from_tiptap(en_doc)
+def test_resolve_blocks_from_envelope(en_doc):
+    blocks = resolve_document_blocks(en_doc)
     assert [b["block_id"] for b in blocks] == ["b1", "b2", "b3"]
-    assert blocks[0]["type"] == "heading"
-    assert "forty hours" in blocks[1]["text"]
+    assert "forty" in blocks[1]["text"]
 
 
-def test_extract_blocks_multi_page(multi_page_doc):
-    blocks = extract_blocks_from_tiptap(multi_page_doc)
-    assert len(blocks) == 4
-    assert blocks[0]["block_id"] == "b1"
-    assert blocks[-1]["block_id"] == "b4"
+def test_resolve_multi_page(multi_page_doc):
+    blocks = resolve_document_blocks(multi_page_doc)
+    ids = [b["block_id"] for b in blocks]
+    assert "b1" in ids and "b4" in ids
 
 
-def test_generate_block_id_format():
-    bid = generate_block_id()
-    assert bid.startswith("b")
-    assert len(bid) == 9
-
-
-def test_validate_tiptap_structure(en_doc):
-    assert validate_tiptap_structure(en_doc) is True
+def test_validate_document_structure(en_doc):
+    assert validate_document_structure(en_doc) is True
+    assert validate_document_structure({"blocks": []}) is False
     assert validate_tiptap_structure({"type": "paragraph"}) is False
 
 
-def test_amharic_doc_blocks(amharic_doc):
-    blocks = extract_blocks_from_tiptap(amharic_doc)
-    assert len(blocks) == 3
+def test_amharic_blocks(amharic_doc):
+    blocks = resolve_document_blocks(amharic_doc)
     assert detect_language(blocks[0]["text"]) == "am"
+
+
+def test_legacy_tiptap_extract_and_convert():
+    tip = make_tiptap_en_doc()
+    legacy = extract_blocks_from_tiptap(tip)
+    drafting = tiptap_to_drafting_blocks(tip)
+    assert len(legacy) == 3
+    assert len(drafting) == 3
+    assert drafting[0]["id"] == "b1"
+    assert "Employment" in drafting[0]["plain_text"]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-# Canonical codes used in prompts / TipTap metadata: am | en | om
+# Canonical codes used in prompts / document metadata: am | en | om
 _LANG_ALIASES: dict[str, str] = {
     "am": "am",
     "amh": "am",

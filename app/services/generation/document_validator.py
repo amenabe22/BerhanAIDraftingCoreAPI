@@ -12,8 +12,13 @@ class DocumentValidator:
 
     @staticmethod
     def _is_tiptap_format(document: Dict[str, Any]) -> bool:
-        """Check if document is in TipTap format."""
+        """Check if document is in TipTap format (legacy)."""
         return document.get("type") == "doc" and "content" in document
+
+    @staticmethod
+    def _is_blocks_format(document: Dict[str, Any]) -> bool:
+        """Check if document is drafting-blocks format."""
+        return isinstance(document.get("blocks"), list)
 
     @staticmethod
     def _get_pages_from_tiptap(document: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -77,13 +82,15 @@ class DocumentValidator:
         min_pages = target_pages if target_pages else settings.MIN_PAGES
         max_pages = settings.MAX_PAGES
         
-        # Handle TipTap format vs legacy format
-        if DocumentValidator._is_tiptap_format(document):
-            # TipTap format: extract pages from content array
+        # Handle blocks / TipTap / legacy formats
+        if DocumentValidator._is_blocks_format(document):
+            pages = []
+            # Estimate pages from word density later; start with 1 logical page
+            page_count = 1
+        elif DocumentValidator._is_tiptap_format(document):
             pages = DocumentValidator._get_pages_from_tiptap(document)
             page_count = len(pages)
         else:
-            # Legacy format: use pages array directly
             pages = document.get("pages", [])
             page_count = len(pages)
         
@@ -103,6 +110,21 @@ class DocumentValidator:
         
         # Calculate total words
         total_words = DocumentValidator._count_words(document)
+        if DocumentValidator._is_blocks_format(document):
+            # Estimate pages from words for blocks documents
+            page_count = max(1, (total_words + settings.MIN_WORDS_PER_PAGE - 1) // settings.MIN_WORDS_PER_PAGE)
+            meets_min_pages = page_count >= min_pages
+            meets_max_pages = page_count <= max_pages
+            # refresh page-related issues
+            issues = [i for i in issues if "pages" not in i.lower()]
+            if not meets_min_pages:
+                issues.append(
+                    f"Document has ~{page_count} pages, minimum required is {min_pages}"
+                )
+            if not meets_max_pages:
+                issues.append(
+                    f"Document has ~{page_count} pages, maximum allowed for initial generation is {max_pages}"
+                )
         min_total_words = min_pages * settings.MIN_WORDS_PER_PAGE
         meets_min_words = total_words >= min_total_words
         
@@ -182,6 +204,18 @@ class DocumentValidator:
             if title:
                 word_count += len(title.split())
         
+        if DocumentValidator._is_blocks_format(document):
+            for block in document.get("blocks") or []:
+                if not isinstance(block, dict):
+                    continue
+                text = (block.get("plain_text") or block.get("text") or "").strip()
+                if not text and block.get("html"):
+                    import re as _re
+                    text = _re.sub(r"<[^>]+>", " ", str(block.get("html")))
+                if text:
+                    word_count += len(text.split())
+            return word_count
+
         # Handle TipTap format vs legacy format
         if DocumentValidator._is_tiptap_format(document):
             # TipTap format: extract text from all nodes
@@ -267,6 +301,16 @@ class DocumentValidator:
         """Count total sections in document."""
         count = 0
         
+        if DocumentValidator._is_blocks_format(document):
+            for block in document.get("blocks") or []:
+                if not isinstance(block, dict):
+                    continue
+                if (block.get("type") in ("heading", "paragraph")) and (
+                    (block.get("plain_text") or block.get("text") or "").strip()
+                ):
+                    count += 1
+            return count
+
         # Handle TipTap format vs legacy format
         if DocumentValidator._is_tiptap_format(document):
             # TipTap format: count headings and paragraphs as sections
@@ -320,6 +364,16 @@ class DocumentValidator:
         """Count total clauses in document."""
         count = 0
         
+        if DocumentValidator._is_blocks_format(document):
+            for block in document.get("blocks") or []:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type") or ""
+                text = (block.get("plain_text") or block.get("text") or "").strip()
+                if btype in ("paragraph", "listItem", "bulletList", "orderedList") and text:
+                    count += 1
+            return count
+
         # Handle TipTap format vs legacy format
         if DocumentValidator._is_tiptap_format(document):
             # In TipTap format, clauses are typically represented as list items or nested paragraphs

@@ -27,8 +27,12 @@ class ContentExpander:
         self.document_builder = DocumentBuilder()
 
     @staticmethod
+    def _is_blocks_format(document: Dict[str, Any]) -> bool:
+        return isinstance(document.get("blocks"), list)
+
+    @staticmethod
     def _is_tiptap_format(document: Dict[str, Any]) -> bool:
-        """Check if document is in TipTap format."""
+        """Check if document is in TipTap format (legacy)."""
         return document.get("type") == "doc" and "content" in document
 
     @staticmethod
@@ -49,9 +53,18 @@ class ContentExpander:
         """Count pages from TipTap format."""
         if ContentExpander._is_tiptap_format(document):
             return len(ContentExpander._get_pages_from_tiptap(document))
-        else:
-            # Legacy format
-            return len(document.get("pages", []))
+        return 0
+
+    def _count_pages(self, document: Dict[str, Any]) -> int:
+        if self._is_blocks_format(document):
+            words = 0
+            for b in document.get("blocks") or []:
+                if isinstance(b, dict):
+                    words += len((b.get("plain_text") or b.get("text") or "").split())
+            from app.config import settings
+            return max(1, (words + settings.MIN_WORDS_PER_PAGE - 1) // settings.MIN_WORDS_PER_PAGE)
+        n = self._count_pages_from_tiptap(document)
+        return n or len(document.get("pages") or []) or 1
 
     async def expand_document(
         self,
@@ -116,9 +129,9 @@ class ContentExpander:
             # Parse expanded document
             expanded_document = self.document_builder.parse_llm_output(response_text)
             
-            # Count pages from TipTap format
-            original_pages = self._count_pages_from_tiptap(document)
-            expanded_pages = self._count_pages_from_tiptap(expanded_document)
+            # Count pages from blocks or TipTap format
+            original_pages = self._count_pages(document)
+            expanded_pages = self._count_pages(expanded_document)
             
             logger.info(
                 f"Document expanded: {original_pages} -> {expanded_pages} pages"
@@ -213,13 +226,13 @@ TASK:
 2. Ensure each page has at least {settings.MIN_WORDS_PER_PAGE} words of rich, detailed content
 3. Add MORE sections, clauses, and detailed legal provisions - be THOROUGH and COMPREHENSIVE within the page limit
 4. Use the legal knowledge provided above to ensure compliance
-5. Maintain the exact TipTap document structure shown below
+5. Maintain the exact drafting-blocks JSON structure shown below
 6. Preserve all existing content, block_ids, and structure
 7. Add new sections/clauses with unique sequential block_ids (continue from existing IDs)
 8. Ensure comprehensive legal coverage with detailed explanations
 9. CRITICAL: Do NOT exceed {max_pages} pages - this is a hard limit for initial generation
 
-DOCUMENT STRUCTURE (maintain this exact TipTap JSON format):
+DOCUMENT STRUCTURE (maintain this exact drafting-blocks JSON format):
 {structure_example}
 
 EXPANSION STRATEGY - BE THOROUGH AND DETAILED:
@@ -238,18 +251,14 @@ IMPORTANT:
 - Only ADD new content and EXPAND existing content with more detail
 - Maintain all existing block_ids (b1, b2, etc.)
 - Generate new unique sequential block_ids for new content (continue numbering)
-- Use TipTap JSON structure (NOT HTML) - paragraphs, headings, etc. as JSON nodes
+- Use drafting blocks JSON with id/type/index/html/plain_text fields
 - Ensure legal accuracy using the knowledge base provided
 - Make the document DENSE with detailed legal provisions
 
-TIPTAP STRUCTURE RULES:
-- Root: {{"type": "doc", "content": [...]}}
-- Page: {{"type": "page", "content": [...]}}
-- PageBreak: {{"type": "pageBreak"}} (between pages)
-- Heading: {{"type": "heading", "attrs": {{"level": N}}, "content": [{{"type": "text", "text": "..."}}]}}
-- Paragraph: {{"type": "paragraph", "attrs": {{"block_id": "bN"}}, "content": [{{"type": "text", "text": "..."}}]}}
-- Text: {{"type": "text", "text": "your text here"}}
-- Assign sequential block_ids: b1, b2, b3, etc. (continue from existing IDs)
+DRAFTING BLOCK STRUCTURE RULES:
+- Root: {{"blocks": [...], "metadata": {{...}}}}
+- Block: {{"id": "bN", "type": "heading|paragraph|...", "index": N, "level": null|1-6, "html": "...", "plain_text": "..."}}
+- Assign sequential ids: b1, b2, b3, etc. (continue from existing IDs)
 
 CRITICAL JSON FORMATTING REQUIREMENTS:
 - You MUST return ONLY valid JSON - no markdown, no code blocks, no explanatory text
@@ -264,16 +273,24 @@ CRITICAL JSON FORMATTING REQUIREMENTS:
 - Every comma must be followed by a key, value, or closing bracket/brace
 - The JSON must be valid and parseable by standard JSON parsers
 
-Respond with ONLY the complete expanded TipTap JSON document structure - no markdown code blocks, no json tags, no additional text - just pure valid JSON starting with {{ and ending with }}.
+Respond with ONLY the complete expanded drafting-blocks JSON document - no markdown code blocks, no json tags, no additional text - just pure valid JSON starting with {{ and ending with }}.
 """
         return prompt
     
     def _format_document_summary(self, document: Dict[str, Any]) -> str:
-        """Format document summary for prompt - works with both TipTap and legacy formats."""
+        """Format document summary for prompt - blocks, TipTap, or legacy."""
+        if self._is_blocks_format(document):
+            blocks = document.get("blocks") or []
+            summary = f"Document has {len(blocks)} blocks:\n"
+            for b in blocks[:30]:
+                if not isinstance(b, dict):
+                    continue
+                text = (b.get("plain_text") or b.get("text") or "")[:100]
+                summary += f"  - {b.get('id')}: [{b.get('type')}] {text}\n"
+            return summary
         if self._is_tiptap_format(document):
             return self._format_tiptap_summary(document)
-        else:
-            return self._format_legacy_summary(document)
+        return self._format_legacy_summary(document)
     
     def _format_tiptap_summary(self, document: Dict[str, Any]) -> str:
         """Format TipTap document summary for prompt."""

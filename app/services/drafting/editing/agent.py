@@ -29,9 +29,12 @@ from app.services.drafting.editing.schemas import (
     validate_operations,
 )
 from app.services.drafting.editing.tiptap import (
+    block_id_of,
+    block_text_of,
     detect_language,
-    extract_blocks_from_tiptap,
-    validate_tiptap_structure,
+    envelope_from_blocks,
+    resolve_document_blocks,
+    validate_document_structure,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,24 +68,30 @@ class SemanticEditAgent:
         if output_language not in ("en", "am", "om"):
             output_language = detect_language(instruction)
 
-        if not validate_tiptap_structure(doc_json):
+        if not validate_document_structure(doc_json):
             return self._error_result(
                 doc_json,
                 operation_id,
                 metrics,
                 started,
-                "Invalid TipTap document structure",
+                "Invalid drafting document structure",
             )
 
-        all_blocks = extract_blocks_from_tiptap(doc_json)
+        working_doc = (
+            doc_json
+            if isinstance(doc_json, dict) and isinstance(doc_json.get("blocks"), list)
+            else envelope_from_blocks(resolve_document_blocks(doc_json))
+        )
+        all_blocks = resolve_document_blocks(working_doc)
         if not all_blocks:
             return self._no_change_result(
-                doc_json,
+                working_doc,
                 operation_id,
                 metrics,
                 started,
                 "Document has no editable blocks",
             )
+        doc_json = working_doc
 
         try:
             # Deterministic global replace fast-path
@@ -130,13 +139,13 @@ class SemanticEditAgent:
                     b
                     for b in all_blocks
                     if any(
-                        tok in (b.get("text") or "").lower()
+                        tok in block_text_of(b).lower()
                         for tok in instruction.lower().split()
                         if len(tok) > 3
                     )
                 ] or ranked[:10]
 
-            all_block_ids = [b["block_id"] for b in all_blocks]
+            all_block_ids = [block_id_of(b) for b in all_blocks]
             validated_operations: list[dict[str, Any]] = []
             patched_doc = doc_json
             revision_feedback: str | None = None
@@ -176,7 +185,7 @@ class SemanticEditAgent:
                 before_ctx = [b for b in all_blocks if b["block_id"] in target_ids]
                 after_ctx = [
                     b
-                    for b in extract_blocks_from_tiptap(candidate_doc)
+                    for b in resolve_document_blocks(candidate_doc)
                     if b["block_id"] in target_ids
                 ]
 
@@ -234,13 +243,13 @@ class SemanticEditAgent:
             return None
         ops: list[dict[str, Any]] = []
         for block in blocks:
-            text = block.get("text") or ""
+            text = block_text_of(block)
             if old_text in text:
                 ops.append(
                     {
                         "op_id": uuid.uuid4().hex[:8],
                         "type": "replace",
-                        "block_id": block["block_id"],
+                        "block_id": block_id_of(block),
                         "payload": {"new_text": text.replace(old_text, new_text)},
                     }
                 )
@@ -253,7 +262,7 @@ class SemanticEditAgent:
         scope: str,
         target_ids: set[str],
     ) -> list[dict[str, Any]]:
-        existing = {b["block_id"] for b in extract_blocks_from_tiptap(doc_json)}
+        existing = {block_id_of(b) for b in resolve_document_blocks(doc_json)}
         filtered: list[dict[str, Any]] = []
         for op in operations:
             bid = op.get("block_id")
@@ -279,24 +288,35 @@ class SemanticEditAgent:
     ) -> dict[str, Any]:
         patched = patched_doc if patched_doc is not None else apply_operations(doc_json, operations)
 
-        before_blocks = extract_blocks_from_tiptap(doc_json)
-        after_blocks = extract_blocks_from_tiptap(patched)
+        before_blocks = resolve_document_blocks(doc_json)
+        after_blocks = resolve_document_blocks(patched)
         changed_ids = {
-            b["block_id"]
+            block_id_of(b)
             for b in before_blocks
-            if b["block_id"] not in {a["block_id"] for a in after_blocks}
-            or next((a["text"] for a in after_blocks if a["block_id"] == b["block_id"]), None)
-            != b["text"]
+            if block_id_of(b) not in {block_id_of(a) for a in after_blocks}
+            or next(
+                (block_text_of(a) for a in after_blocks if block_id_of(a) == block_id_of(b)),
+                None,
+            )
+            != block_text_of(b)
         }
         changed_ids.update(
-            {b["block_id"] for b in after_blocks if b["block_id"] not in {x["block_id"] for x in before_blocks}}
+            {
+                block_id_of(b)
+                for b in after_blocks
+                if block_id_of(b) not in {block_id_of(x) for x in before_blocks}
+            }
         )
 
         before_text = "\n".join(
-            f"{b['block_id']}: {b['text']}" for b in before_blocks if b["block_id"] in changed_ids
+            f"{block_id_of(b)}: {block_text_of(b)}"
+            for b in before_blocks
+            if block_id_of(b) in changed_ids
         )
         after_text = "\n".join(
-            f"{b['block_id']}: {b['text']}" for b in after_blocks if b["block_id"] in changed_ids
+            f"{block_id_of(b)}: {block_text_of(b)}"
+            for b in after_blocks
+            if block_id_of(b) in changed_ids
         )
 
         semantic_diff: str | None = None
@@ -319,6 +339,7 @@ class SemanticEditAgent:
 
         return {
             "document": patched,
+            "blocks": patched.get("blocks") if isinstance(patched, dict) else None,
             "diff": semantic_diff,
             "metrics": metrics,
             "operations": operations,
@@ -337,8 +358,10 @@ class SemanticEditAgent:
         operations: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         metrics["execution_time_ms"] = int((time.perf_counter() - started) * 1000)
+        doc = deepcopy(doc_json)
         return {
-            "document": deepcopy(doc_json),
+            "document": doc,
+            "blocks": doc.get("blocks") if isinstance(doc, dict) else None,
             "diff": reason,
             "metrics": metrics,
             "operations": operations or [],
@@ -356,8 +379,10 @@ class SemanticEditAgent:
         error: str,
     ) -> dict[str, Any]:
         metrics["execution_time_ms"] = int((time.perf_counter() - started) * 1000)
+        doc = deepcopy(doc_json)
         return {
-            "document": deepcopy(doc_json),
+            "document": doc,
+            "blocks": doc.get("blocks") if isinstance(doc, dict) else None,
             "diff": f"Error occurred during processing: {error}. Document remains unchanged.",
             "metrics": metrics,
             "operations": [],

@@ -15,14 +15,14 @@ class DocumentBuilder:
 
     def parse_llm_output(self, llm_output: str) -> Dict[str, Any]:
         """
-        Parse LLM output and extract TipTap JSON document structure.
+        Parse LLM output and extract drafting-blocks JSON document structure.
         Uses centralized robust JSON parser with enhanced error messages.
         
         Args:
             llm_output: Raw LLM response (may contain JSON wrapped in markdown or text)
         
         Returns:
-            Parsed TipTap document structure dictionary
+            Parsed drafting document dictionary ({blocks, metadata?})
         
         Raises:
             ValueError: If JSON cannot be parsed, with detailed error context
@@ -55,8 +55,8 @@ class DocumentBuilder:
                 schema=None,  # Don't validate against old schema
                 extract_from_markdown=True
             )
-            logger.info("Successfully parsed TipTap JSON document structure")
-            return self._normalize_tiptap_structure(document)
+            logger.info("Successfully parsed drafting-blocks JSON document structure")
+            return self._normalize_document_structure(document)
         except ValueError as e:
             error_msg = str(e)
             
@@ -475,59 +475,54 @@ class DocumentBuilder:
             logger.debug(f"HTML quote escape strategy failed: {e}")
             raise
 
+    def _normalize_document_structure(self, document: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize and validate drafting-blocks document structure."""
+        from app.services.drafting.editing.tiptap import (
+            envelope_from_blocks,
+            tiptap_to_drafting_blocks,
+        )
+        from app.services.export.blocks_text import normalize_blocks
+
+        # Preferred: {blocks: [...], metadata?: ...}
+        if isinstance(document.get("blocks"), list):
+            blocks = normalize_blocks(document["blocks"])
+            if not blocks:
+                raise ValueError("Document blocks array is empty")
+            result: Dict[str, Any] = {"blocks": blocks}
+            if isinstance(document.get("metadata"), dict):
+                result["metadata"] = document["metadata"]
+            # Preserve internal annotation keys
+            for key, value in document.items():
+                if str(key).startswith("_"):
+                    result[key] = value
+            logger.info("Normalized drafting document with %s blocks", len(blocks))
+            return result
+
+        # Legacy TipTap inbound from older prompts/models
+        if document.get("type") == "doc" and isinstance(document.get("content"), list):
+            blocks = tiptap_to_drafting_blocks(document)
+            meta = document.get("metadata") if isinstance(document.get("metadata"), dict) else {}
+            result = envelope_from_blocks(blocks, meta or None)
+            for key, value in document.items():
+                if str(key).startswith("_"):
+                    result[key] = value
+            logger.info("Normalized legacy TipTap document into %s blocks", len(blocks))
+            return result
+
+        raise ValueError('Document must include a non-empty "blocks" array')
+
     def _normalize_tiptap_structure(self, document: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize and validate TipTap document structure."""
-        # Ensure root type is "doc"
-        if document.get("type") != "doc":
-            raise ValueError("Document must have 'type': 'doc' at root")
-        
-        # Ensure content exists
-        if "content" not in document:
-            raise ValueError("Document missing 'content' field")
-        
-        if not isinstance(document["content"], list):
-            raise ValueError("'content' must be a list")
-        
-        # Add block_ids to paragraphs that don't have them
-        block_counter = 1
-        
-        def add_block_ids(nodes: List[Dict[str, Any]]) -> None:
-            nonlocal block_counter
-            for node in nodes:
-                node_type = node.get("type", "")
-                
-                # Add block_id to paragraphs and listItems
-                if node_type in ["paragraph", "listItem"]:
-                    attrs = node.get("attrs", {})
-                    if "block_id" not in attrs:
-                        attrs["block_id"] = f"b{block_counter}"
-                        node["attrs"] = attrs
-                        block_counter += 1
-                
-                # Recursively process content
-                if "content" in node and isinstance(node["content"], list):
-                    add_block_ids(node["content"])
-        
-        add_block_ids(document["content"])
-        
-        logger.info(f"Normalized TipTap document with {block_counter - 1} blocks")
-        return document
-    
+        """Legacy alias — delegates to blocks normalizer."""
+        return self._normalize_document_structure(document)
+
     def _normalize_structure(self, document: Dict[str, Any]) -> Dict[str, Any]:
         """Legacy: Normalize old format (kept for backward compatibility)."""
-        return self._normalize_tiptap_structure(document)
+        return self._normalize_document_structure(document)
 
     def convert_to_ingestion_format(self, document: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Convert TipTap document structure to ingestion format (HTML blocks).
-        
-        Args:
-            document: TipTap JSON document structure
-        
-        Returns:
-            List of sections/blocks in ingestion format
+        Convert drafting document structure to ingestion format (HTML blocks).
         """
-        # Ingestion/format conversion stays on the main API for this phase.
         logger.info("convert_to_ingestion_format is not supported in core-service generation")
         return []
 

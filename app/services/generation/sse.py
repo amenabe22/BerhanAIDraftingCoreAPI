@@ -70,11 +70,13 @@ class SSEEmitter:
         )
 
     async def node_stream(self, thread_id: str, node: dict[str, Any], node_index: int) -> None:
+        """Stream a drafting block (legacy event name node_stream)."""
         await self.emit(
             {
                 "type": "node_stream",
                 "thread_id": thread_id,
-                "node": node,
+                "block": node,
+                "node": node,  # alias for transitional clients
                 "node_index": node_index,
             }
         )
@@ -103,17 +105,39 @@ class SSEEmitter:
     async def document_generated(
         self,
         thread_id: str,
-        document: dict[str, Any],
+        document: dict[str, Any] | list[Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        *,
+        blocks: list[Any] | None = None,
     ) -> None:
-        await self.emit(
-            {
-                "type": "document_generated",
-                "thread_id": thread_id,
-                "document": document,
-                "metadata": metadata or {},
-            }
-        )
+        """Emit completed drafting document as blocks (+ optional metadata)."""
+        resolved_blocks: list[Any]
+        resolved_meta = dict(metadata or {})
+        if blocks is not None:
+            resolved_blocks = list(blocks)
+        elif isinstance(document, list):
+            resolved_blocks = document
+        elif isinstance(document, dict) and isinstance(document.get("blocks"), list):
+            resolved_blocks = document["blocks"]
+            if isinstance(document.get("metadata"), dict):
+                resolved_meta = {**document["metadata"], **resolved_meta}
+        else:
+            # Legacy TipTap inbound — convert for wire format
+            from app.services.drafting.editing.tiptap import tiptap_to_drafting_blocks
+
+            resolved_blocks = tiptap_to_drafting_blocks(document or {})
+            if isinstance(document, dict) and isinstance(document.get("metadata"), dict):
+                resolved_meta = {**document["metadata"], **resolved_meta}
+
+        payload: dict[str, Any] = {
+            "type": "document_generated",
+            "thread_id": thread_id,
+            "blocks": resolved_blocks,
+            "metadata": resolved_meta,
+        }
+        # Transitional envelope for callers that still read document
+        payload["document"] = {"blocks": resolved_blocks, "metadata": resolved_meta}
+        await self.emit(payload)
 
     async def error(self, message: str) -> None:
         await self.emit({"type": "error", "message": message})

@@ -61,7 +61,7 @@ def _sse_response(queue: asyncio.Queue, thread_id: str, run_coro) -> StreamingRe
 @router.post("")
 @router.post("/", include_in_schema=False)
 async def generate_structured(request: StructuredGenerateRequest) -> StreamingResponse:
-    """One-shot agent drafting: structured JSON payload → TipTap SSE → Contabo export URLs.
+    """One-shot agent drafting: structured JSON payload → drafting-blocks SSE → Contabo export URLs.
 
     Required: ``doc_type``, ``type`` (pdf/docx), ``metadata`` (camelCase JSON Schema —
     see ``GET /drafting/generate/metadata-schema``; required keys ``title``, ``parties``,

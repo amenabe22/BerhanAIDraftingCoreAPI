@@ -30,7 +30,7 @@ from app.services.generation.streaming_json_validator import (
     StreamingJSONValidator,
     ValidationErrorType,
 )
-from app.services.generation.streaming_parser import TipTapStreamingParser
+from app.services.generation.streaming_parser import BlocksStreamingParser, TipTapStreamingParser
 from app.services.generation.thread_store import (
     ConversationStatus,
     ThreadStore,
@@ -52,7 +52,7 @@ def _human_content(message: str, file_url: str | None) -> str | list[dict[str, A
 
 
 class GenerationAgent:
-    """Analyze requirements and generate TipTap documents over SSE."""
+    """Analyze requirements and generate drafting-block documents over SSE."""
 
     def __init__(self, store: ThreadStore | None = None) -> None:
         self.store = store or thread_store
@@ -369,7 +369,7 @@ class GenerationAgent:
             chunk_count = 0
             last_progress_update = 0
             nodes_streamed = 0
-            parser = TipTapStreamingParser()
+            parser = BlocksStreamingParser()
             validator = StreamingJSONValidator()
             llm_start = time.time()
 
@@ -522,7 +522,7 @@ class GenerationAgent:
 
             assert document is not None
 
-            # Ensure TipTap metadata.language matches the pinned preference
+            # Ensure metadata.language matches the pinned preference
             preferred_lang = normalize_language_code(requirements.get("language", "en"))
             meta = document.get("metadata")
             if isinstance(meta, dict):
@@ -599,5 +599,5 @@ Error: {error_message}
 {f"Context: {error_context}" if error_context else ""}
 
 Fix the JSON. After every }} or ]] that is NOT the last element, add a comma.
-Return ONLY valid TipTap JSON. No markdown fences.
+Return ONLY valid drafting-blocks JSON ({"blocks":[...], "metadata":{...}}). No markdown fences.
 """
