@@ -759,6 +759,8 @@ def _build_analysis_llm() -> ChatOpenAI:
         "max_tokens": getattr(settings, "COMPLIANCE_ANALYSIS_MAX_TOKENS", 32768),
         "streaming": True,
         "seed": seed,
+        "timeout": 300,
+        "max_retries": 2,
         "model_kwargs": {
             "response_format": {"type": "json_object"},
         },
@@ -883,6 +885,9 @@ Previous rubric evaluation (baseline — keep each item's status UNLESS the text
         block_char_limit=block_char_limit,
     )
     lang = normalize_language_code(language)
+    suggested_text_example = (
+        'GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."'
+    )
     if lang == "om":
         lang_rule = (
             f"Write summary, implications, recommendations, problem_summary, "
@@ -893,7 +898,15 @@ Previous rubric evaluation (baseline — keep each item's status UNLESS the text
     elif lang == "am":
         lang_rule = (
             f"Write those narrative fields in Amharic (አማርኛ). "
-            f'Set editor_fix.document_language to "am".'
+            f'Set editor_fix.document_language to "am". '
+            f"suggested_text and rewrite_directive MUST be concrete Amharic replacement text "
+            f"(not English). Do NOT Westernize Ethiopian months into transliterations "
+            f"(forbid ዲሴምበር፣ ጃንዩወሪ, etc.); keep Ge'ez months + ዓ.ም. when dates appear. "
+            f'GOOD suggested_text: "ሠራተኛው በየወሩ የ[AMOUNT] ብር መሠረታዊ ደመወዝ ይቀበላል፤ ክፍያ በ[FREQUENCY] ይከናወናል።" '
+            f'BAD: English-only "The Employee shall receive a monthly base salary of [AMOUNT] ETB...".'
+        )
+        suggested_text_example = (
+            'GOOD suggested_text: "ሠራተኛው በየወሩ የ[AMOUNT] ብር መሠረታዊ ደመወዝ ይቀበላል፤ ክፍያ በ[FREQUENCY] ይከናወናል።"'
         )
     else:
         lang_rule = (
@@ -947,7 +960,7 @@ CRITICAL block_id rules:
 
 IMPORTANT: You MUST populate the "clauses" array. List each substantive clause or paragraph from the document: for each one give clause_id (e.g. clause_1, clause_2), text (excerpt of the clause), risk_level (LOW|MEDIUM|HIGH|CRITICAL), implications (legal implications in 1–2 sentences), block_id from the Document blocks list above (or null), and citations: []. For any clause with risk_level MEDIUM, HIGH, or CRITICAL, you MUST also populate ethiopian_law_implications (list of specific Ethiopian law implications for that clause) and recommendations (list of actionable steps to address the risk). Leave both as [] for LOW risk clauses. Do NOT return an empty "clauses" array when the document has content—include at least one clause per substantive paragraph or section.
 
-For clauses with risk_level MEDIUM, HIGH, or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW clauses only, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. Keep every editor_fix field concise (short phrases, not paragraphs). editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Set editor_fix.severity to medium_risk for MEDIUM, high_risk for HIGH, or critical_risk for CRITICAL. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." GOOD suggested_text: "The Employee shall receive a monthly base salary of [AMOUNT] ETB, payable [FREQUENCY]..."
+For clauses with risk_level MEDIUM, HIGH, or CRITICAL, you MUST populate "editor_fix" (a structured edit spec for the document editor). For LOW clauses only, set "editor_fix": null. The editor_fix object is separate from recommendations: recommendations are human-facing advice; editor_fix powers automated rewrites. Keep every editor_fix field concise (short phrases, not paragraphs). editor_fix.rewrite_directive and editor_fix.suggested_text must be imperative rewrite instructions with concrete replacement text — NOT restatements of law like "Ethiopian law requires...". Use [BRACKETED_PLACEHOLDERS] in suggested_text when specific values are unknown. Set editor_fix.block_id to the clause block_id when known. Set editor_fix.severity to medium_risk for MEDIUM, high_risk for HIGH, or critical_risk for CRITICAL. Example: BAD rewrite_directive: "Ethiopian law requires clear compensation terms." GOOD rewrite_directive: "Rewrite to state base salary, payment frequency, and benefits explicitly." {suggested_text_example}
 
 Output a single JSON object with this structure (use empty arrays only for issues/citations/missing_clauses if none; clauses must be non-empty when the document has text; rubric_checks MUST include every rubric id listed above):
 {{

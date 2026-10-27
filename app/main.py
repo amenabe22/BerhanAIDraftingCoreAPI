@@ -23,6 +23,7 @@ from app.graph import (
 )
 from app.llm import SupportedModel, resolve_model
 from app.logging_config import get_logger, setup_logging
+from app.services.chat_attachments import resolve_human_message_content
 
 setup_logging()
 log = get_logger("chat")
@@ -35,13 +36,28 @@ class Language(str, Enum):
 
 
 _LANG_INSTRUCTION: dict[Language, str] = {
-    Language.amharic: "Always respond in Amharic (አማርኛ).",
-    Language.english: "Always respond in English.",
-    Language.oromo: "Always respond in Oromo (Afaan Oromoo).",
+    Language.amharic: (
+        "Respond entirely in Amharic (አማርኛ). "
+        "The full answer — explanations, step lists, caveats, refusals (if any), and gap notices — "
+        "must be Amharic. Do NOT switch to English for disclaimers, tax caveats, or "
+        "\"I cannot…\" / \"consult an advisor\" lines. English is only allowed for proper nouns, "
+        "statute titles, and article numbers when needed."
+    ),
+    Language.english: (
+        "Respond entirely in English. Do not switch to Amharic or Oromo mid-reply."
+    ),
+    Language.oromo: (
+        "Respond entirely in Afaan Oromo. "
+        "The full answer — explanations, steps, caveats, refusals (if any), and gap notices — "
+        "must be Afaan Oromo. Do NOT switch to English for disclaimers or brush-off lines."
+    ),
 }
 
 _LANG_DEFAULT_INSTRUCTION = (
-    "Detect the language of the user's message and always respond in that same language."
+    "Detect the language of the user's latest message and respond in that same language for the "
+    "ENTIRE reply (including caveats and any soft refusal). "
+    "If the user wrote in Amharic (Ethiopic script), answer in Amharic only — never English prose. "
+    "If they wrote in Afaan Oromo, answer in Afaan Oromo only."
 )
 
 
@@ -60,8 +76,8 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
     language: Language | None = None
-    # Optional URL of any file/image supported by Gemini multimodal (JPEG, PNG,
-    # GIF, WEBP, PDF, MP4, MP3, WAV, …). Null / omitted → text-only message.
+    # Optional attachment URL. Images (JPEG/PNG/GIF/WEBP) are sent multimodal;
+    # DOCX is text-extracted; PDF is sent as a MIME data URL. Null → text-only.
     file_url: str | None = None
     # Model selection — must be one of the supported OpenRouter model IDs.
     # Omit to use the server default (GEMINI_MODEL env var).
@@ -195,21 +211,15 @@ def _is_new_thread(graph, thread_id: str) -> bool:
         return True
 
 
-def _human_message_content(message: str, file_url: str | None) -> str | list:
-    """Build HumanMessage content: plain text, or text + image for Gemini multimodal."""
-    url = (file_url or "").strip() or None
-    if not url:
-        return message
-    return [
-        {"type": "text", "text": message},
-        {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
-    ]
-
-
 def _user_facing_stream_error(message: str) -> str:
     lower = (message or "").strip().lower()
     if "json error injected into sse stream" in lower:
         return "The AI service had a temporary connection issue. Please try again."
+    if "unsupported image format" in lower or "supported formats: png" in lower:
+        return (
+            "That attachment could not be read as an image. "
+            "For contracts, upload PDF or DOCX (or paste the text) and try again."
+        )
     return message or "Upstream error"
 
 
@@ -239,7 +249,7 @@ async def _stream_endpoint(
         },
     )
 
-    human_content = _human_message_content(request.message, request.file_url)
+    human_content = await resolve_human_message_content(request.message, request.file_url)
 
     # Only inject the SystemMessage on the very first turn of a thread.
     # On follow-up turns the checkpointer already has the system message stored.
@@ -330,6 +340,8 @@ async def _stream_endpoint(
                         elif ptype == "edit_result":
                             # Full TipTap document + ops for CoreAPI / clients
                             yield f"data: {json.dumps(payload, default=str)}\n\n"
+                        elif ptype == "clarification_needed":
+                            yield f"data: {json.dumps(payload, default=str)}\n\n"
                     continue
 
                 if mode == "error":
@@ -344,17 +356,47 @@ async def _stream_endpoint(
                 content = getattr(chunk, "content", None)
 
                 # Detect the moment the agent decides to call a tool and notify the client
-                if not status_sent and getattr(chunk, "tool_calls", None) and node == "agent":
-                    status_sent = True
+                if getattr(chunk, "tool_calls", None) and node == "agent":
                     tool_names = []
                     for tc in chunk.tool_calls or []:
                         name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
                         if name:
                             tool_names.append(name)
-                    msg = status_message
-                    if "apply_document_edit" in tool_names:
-                        msg = "Applying document edit…"
-                    yield f"data: {json.dumps({'type': 'status', 'message': msg})}\n\n"
+                    _TOOL_LABELS = {
+                        "search_user_documents": "Searching your document",
+                        "search_legal_knowledge": "Searching Ethiopian law",
+                        "apply_document_edit": "Drafting the edit",
+                    }
+                    _TOOL_KINDS = {
+                        "search_user_documents": "search_doc",
+                        "search_legal_knowledge": "search_law",
+                        "apply_document_edit": "edit",
+                    }
+                    for name in tool_names:
+                        label = _TOOL_LABELS.get(name, status_message)
+                        kind = _TOOL_KINDS.get(name, "answer")
+                        yield (
+                            "data: "
+                            + json.dumps(
+                                {
+                                    "type": "agent_step",
+                                    "tool_name": name,
+                                    "kind": kind,
+                                    "label": label,
+                                    "status": "running",
+                                    "message": label,
+                                }
+                            )
+                            + "\n\n"
+                        )
+                    if not status_sent:
+                        status_sent = True
+                        msg = status_message
+                        if "apply_document_edit" in tool_names:
+                            msg = "Drafting edit"
+                        elif tool_names:
+                            msg = _TOOL_LABELS.get(tool_names[0], status_message)
+                        yield f"data: {json.dumps({'type': 'status', 'message': msg, 'tool_name': tool_names[0] if tool_names else None})}\n\n"
 
                 if isinstance(chunk, ToolMessage):
                     tid = getattr(chunk, "tool_call_id", None) or chunk.id or ""

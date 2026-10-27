@@ -11,6 +11,28 @@ logger = logging.getLogger(__name__)
 class PromptBuilder:
     """Service for constructing prompts for document generation."""
 
+    AMHARIC_DATE_AND_STYLE = """
+AMHARIC DATE, CALENDAR, AND LEGAL STYLE (language=am ONLY):
+- Use Ethiopian (Ge'ez) calendar as PRIMARY for all dates you invent or format.
+- Allowed months ONLY: መስከረም፣ ጥቅምት፣ ህዳር፣ ታህሳስ፣ ጥር፣ የካቲት፣ መጋቢት፣ ሚያዝያ፣ ግንቦት፣ ሰኔ፣ ሐምሌ፣ ነሐሴ፣ ጳጉሜ.
+- Write years with ዓ.ም. (e.g. በታህሳስ 22 ቀን 2018 ዓ.ም.).
+- NEVER transliterate Western months: forbid ዲሴምበር፣ ጃንዩወሪ፣ ፌብሩወሪ፣ ማርች፣ ኤፕሪል፣ ሜይ፣ ጁን፣ ጁላይ፣ ኦገስት፣ ሴፕቴምበር፣ ኦክቶበር፣ ኖቬምበር.
+- If the user supplied an explicit Gregorian date, keep their wording and you MAY add Ethiopian calendar in parentheses; otherwise invent dates only in Ethiopian calendar form.
+- Prefer Ethiopian legal Amharic: ውል/ስምምነት፣ ወገኖች፣ ተፈጻሚ ሕግ፣ የክርክር መፍቻ፣ ማስታወቂያ፣ አጠቃላይ ስምምነት፣ ፊርማ.
+- Currency: ብር / ETB. Jurisdiction: የኢትዮጵያ ፍርድ ቤቶች (or Addis Ababa / Federal courts as context requires).
+- Preserve user-provided proper nouns (names, addresses) exactly as given; generate surrounding legal prose in Amharic.
+"""
+
+    AMHARIC_GOVERNING_LAW = (
+        "ይህ ስምምነት በኢትዮጵያ ሕጎች ተፈጻሚ ይሆናል እና በእነዚያ ሕጎች መሠረት ይተረጎማል።"
+    )
+    AMHARIC_JURISDICTION = (
+        "ከዚህ ስምምነት የሚነሱ ክርክሮች በኢትዮጵያ ፍርድ ቤቶች ልዩ ሥልጣን ስር ይሆናሉ።"
+    )
+    AMHARIC_EXECUTION = (
+        "በዚህ መሠረት ወገኖቹ ይህን ስምምነት በየራሳቸው በተፈቀደላቸው ተወካዮች አማካኝነት በታች በተገለጸው ቀን ፈጽመዋል።"
+    )
+
     DOCUMENT_STRUCTURE_EXAMPLE_AMHARIC = """
 {
   "type": "doc",
@@ -34,7 +56,7 @@ class PromptBuilder:
           "content": [
             {
               "type": "text",
-              "text": "ይህ ስምምነት በዲሴምበር 1፣ 2025 የተፈጠረ ሲሆን በዴላዌር ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ኤ እና በካሊፎርኒያ ግዛት ህጎች መሠረት የተዋቀረ ኩባንያ ቢ መካከል ነው።"
+              "text": "ይህ ስምምነት በታህሳስ 22 ቀን 2018 ዓ.ም. የተፈጸመ ሲሆን በኢትዮጵያ ሕጎች መሠረት የተቋቋመ ኩባንያ ኤ እና በኢትዮጵያ ሕጎች መሠረት የተቋቋመ ኩባንያ ቢ መካከል ነው፤ ይህ ስምምነት በኢትዮጵያ ሕጎች ተፈጻሚ ይሆናል።"
             }
           ]
         },
@@ -115,7 +137,7 @@ class PromptBuilder:
           "content": [
             {
               "type": "text",
-              "text": "This agreement is entered into on December 1, 2025, between Company A, organized under Delaware law, and Company B, organized under California law."
+              "text": "This agreement is entered into on December 1, 2025, between Company A, a company incorporated under the laws of Ethiopia, and Company B, a company incorporated under the laws of Ethiopia, and shall be governed by and construed in accordance with the laws of Ethiopia."
             }
           ]
         },
@@ -220,7 +242,9 @@ CRITICAL LANGUAGE REQUIREMENT:
 """
 
         json_requirements = self._get_json_formatting_requirements()
-        
+        from app.services.generation.clarification_questions import questions_prompt_block
+
+        questions_format = questions_prompt_block()
         prompt = f"""You are a legal document generation assistant. Analyze the user's request and determine what information is needed.
 
 {language_instruction}
@@ -256,7 +280,7 @@ ANALYSIS PROCESS:
    - Ask relevant questions in missing_info array
    - **If num_pages is NOT specified, add a question about desired document length:**
      * English: "How many pages should the document be? (e.g., 2-3 pages for a brief document, 4-6 pages for a standard document)"
-     * Amharic: "መልእክቱ ስንት ገጾች ሊኖረው ይገባል? (ለአጭር ሰነድ 2-3 ገጾች፣ ለመደበኛ ሰነድ 4-6 ገጾች)"
+     * Amharic: "ሰነዱ ስንት ገጾች ሊኖረው ይገባል? (ለአጭር ሰነድ 2-3 ገጾች፣ ለመደበኛ ሰነድ 4-6 ገጾች)"
    - Provide a friendly response asking for the missing information
 6. If user EXPLICITLY requested simplicity:
    - Extract document type and language
@@ -270,17 +294,12 @@ CRITICAL: Do NOT assume the user wants simplicity. Only treat as simple if they 
 
 QUESTION FORMATTING REQUIREMENTS:
 - Keep ALL questions SHORT and CONCISE
-- Each question MUST be 1-2 lines maximum
-- Use direct, simple language
-- Avoid lengthy explanations or examples in questions
-- Examples of good short questions:
-  * "What type of legal agreement do you need?"
-  * "Who are the parties and their addresses?"
-  * "What is the effective date?"
-  * "What is the monetary value and currency?"
-  * "What jurisdiction or governing law applies?"
-  * "How many pages should the document be?"
-- DO NOT write long questions like "What is the specific type of legal agreement you need (e.g., Non-Disclosure Agreement, Sales Agreement, Service Agreement)?"
+- Each question prompt MUST be 1-2 lines maximum
+- Prefer single_choice with 2-5 options for closed questions (type, length, law, yes/no)
+- Use text kind only for open answers (party names, addresses, unique amounts)
+- DO NOT put example lists inside the prompt — put them in options[]
+
+{questions_format}
 
 {json_requirements}
 
@@ -288,9 +307,9 @@ Respond with a JSON object containing:
 - "document_type": string (e.g., "service agreement", "contract", "NDA")
 - "language": string ("am" for Amharic, "en" for English, "om" for Afaan Oromo)
 - "extracted_info": object with extracted info including "num_pages" if specified (only use defaults if user explicitly requested simplicity)
-- "questions": array of questions (MUST include questions unless user explicitly said to skip) - KEEP EACH QUESTION TO 1-2 LINES MAX
+- "questions": array of QUESTION OBJECTS (MUST include unless user explicitly said to skip)
 - "ready_to_generate": boolean (true ONLY if you have complete info OR user explicitly requested simplicity)
-- "response_message": string (friendly message, include questions if ready_to_generate is false)
+- "response_message": string (friendly message; do not re-list all options here)
 """
         return prompt
 
@@ -334,7 +353,9 @@ CRITICAL LANGUAGE REQUIREMENT:
 """
 
         json_requirements = self._get_json_formatting_requirements()
-        
+        from app.services.generation.clarification_questions import questions_prompt_block
+
+        questions_format = questions_prompt_block()
         prompt = f"""You are a legal document generation assistant. Process the user's response and update requirements.
 
 {language_instruction}
@@ -372,7 +393,7 @@ PROCESSING:
    - Ask follow-up questions in questions array
    - **If num_pages is still NOT specified, add a question about desired document length:**
      * English: "How many pages should the document be? (e.g., 2-3 pages for a brief document, 4-6 pages for a standard document)"
-     * Amharic: "መልእክቱ ስንት ገጾች ሊኖረው ይገባል? (ለአጭር ሰነድ 2-3 ገጾች፣ ለመደበኛ ሰነድ 4-6 ገጾች)"
+     * Amharic: "ሰነዱ ስንት ገጾች ሊኖረው ይገባል? (ለአጭር ሰነድ 2-3 ገጾች፣ ለመደበኛ ሰነድ 4-6 ገጾች)"
    - Provide a friendly response asking for remaining information
 7. If user EXPLICITLY requested to proceed OR you have complete information:
    - Use GENERIC/SAMPLE data for any remaining missing information (if user requested simplicity)
@@ -385,25 +406,20 @@ CRITICAL: Do NOT assume the user wants to proceed. Only treat as ready if you ha
 
 QUESTION FORMATTING REQUIREMENTS:
 - Keep ALL questions SHORT and CONCISE
-- Each question MUST be 1-2 lines maximum
-- Use direct, simple language
-- Avoid lengthy explanations or examples in questions
-- Examples of good short questions:
-  * "What type of legal agreement do you need?"
-  * "Who are the parties and their addresses?"
-  * "What is the effective date?"
-  * "What is the monetary value and currency?"
-  * "What jurisdiction or governing law applies?"
-  * "How many pages should the document be?"
-- DO NOT write long questions with examples or lengthy explanations
+- Each question prompt MUST be 1-2 lines maximum
+- Prefer single_choice with 2-5 options for closed questions
+- Use text kind only for open answers
+- DO NOT put example lists inside the prompt — put them in options[]
+
+{questions_format}
 
 {json_requirements}
 
 Respond with a JSON object containing:
 - "updated_requirements": object with updated/extracted information including "num_pages" if specified
 - "ready_to_generate": boolean (true ONLY if you have complete info OR user explicitly said to proceed)
-- "response_message": string (acknowledge input, include questions if ready_to_generate is false)
-- "questions": array of strings (MUST include questions if information is missing and user didn't explicitly say to proceed) - KEEP EACH QUESTION TO 1-2 LINES MAX
+- "response_message": string (acknowledge input; do not re-list all options here)
+- "questions": array of QUESTION OBJECTS (MUST include if information is missing and user didn't explicitly say to proceed)
 """
         return prompt
 
@@ -414,39 +430,42 @@ Respond with a JSON object containing:
         knowledge_context: str = "",
     ) -> str:
         """Build prompt for generating the document structure."""
+        # Select appropriate example based on language (normalize aliases like amh/oro)
+        language = normalize_language_code(requirements.get("language", "en"))
+        history_limit = 500 if language == "am" else 300
+
         history_text = ""
         if conversation_history:
             history_text = "\n\nRecent Conversation Context:\n"
             # Limit to last 3 messages to reduce prompt size
             for msg in conversation_history[-3:]:
                 content = msg.get('content', '')
-                # Truncate very long messages to 300 chars
-                if len(content) > 300:
-                    content = content[:300] + "..."
+                if len(content) > history_limit:
+                    content = content[:history_limit] + "..."
                 if msg.get("role") == "user":
                     history_text += f"User: {content}\n"
                 elif msg.get("role") == "assistant":
                     history_text += f"Assistant: {content}\n"
 
-        # Select appropriate example based on language (normalize aliases like amh/oro)
-        language = normalize_language_code(requirements.get("language", "en"))
         if language == "am":
             structure_example = self.DOCUMENT_STRUCTURE_EXAMPLE_AMHARIC
-            language_instruction = """
-CRITICAL LANGUAGE REQUIREMENT:
+            language_instruction = f"""
+CRITICAL LANGUAGE REQUIREMENT (AMHARIC MODE):
 - You MUST generate the ENTIRE document in Amharic (አማርኛ)
 - All text, titles, content, clauses MUST be in Amharic
 - Use Amharic characters and proper Amharic formatting
 - The metadata language field MUST be "am"
-- IMPORTANT: Preserve user-provided information (names, addresses, dates, etc.) exactly as provided
+- IMPORTANT: Preserve user-provided information (names, addresses) exactly as provided
 - If the user provided names/addresses in English, keep them in English within the Amharic document
 - Only translate your generated legal text to Amharic, not the user's specific information
+{self.AMHARIC_DATE_AND_STYLE}
 """
             final_language_reminder = """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FINAL LANGUAGE CHECK (OVERRIDES PLACEHOLDER EXAMPLES ABOVE):
 - The English text in the JSON syntax examples is PLACEHOLDER ONLY for comma/brace rules.
 - Your actual document body, headings, and clauses MUST be written in Amharic (አማርኛ).
+- Use Ethiopian calendar dates (Ge'ez months + ዓ.ም.); never Western month transliterations.
 - metadata.language MUST be "am".
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -471,10 +490,11 @@ FINAL LANGUAGE CHECK (OVERRIDES PLACEHOLDER EXAMPLES ABOVE):
         else:
             structure_example = self.DOCUMENT_STRUCTURE_EXAMPLE_ENGLISH
             language_instruction = """
-CRITICAL LANGUAGE REQUIREMENT:
+CRITICAL LANGUAGE REQUIREMENT (ENGLISH MODE):
 - You MUST generate the ENTIRE document in English
 - All text, titles, content, clauses MUST be in English
 - The metadata language field MUST be "en"
+- Use Gregorian calendar dates (e.g. December 1, 2025) unless the user specified otherwise
 - IMPORTANT: Preserve user-provided information (names, addresses, dates, etc.) exactly as provided
 - Keep all user-provided information in its original language
 """
@@ -508,14 +528,12 @@ CRITICAL LANGUAGE REQUIREMENT:
 
         json_requirements = self._get_json_formatting_requirements()
 
-        # Get user-specified page count or use default
+        # Explicit num_pages is an exact hard target (no +1 buffer)
         target_pages = requirements.get("num_pages")
         if target_pages and isinstance(target_pages, int) and 1 <= target_pages <= 20:
-            # User specified a valid page count
             min_pages = target_pages
-            max_pages = min(target_pages + 1, settings.MAX_PAGES)  # Allow 1 page buffer, but cap at max
+            max_pages = target_pages
         else:
-            # Use default settings
             min_pages = settings.MIN_PAGES
             max_pages = settings.MAX_PAGES
 
@@ -528,15 +546,14 @@ CRITICAL LANGUAGE REQUIREMENT:
 🚨 CRITICAL LENGTH REQUIREMENTS - MUST BE MET IN THIS SINGLE GENERATION 🚨
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 YOU MUST GENERATE A COMPLETE DOCUMENT RIGHT NOW WITH:
-✓ TARGET: {min_pages} pages (REQUIRED - generate exactly this many pages)
+✓ EXACT PAGE COUNT: {min_pages} pages (HARD TARGET — generate exactly this many page nodes)
 ✓ MAXIMUM: {max_pages} pages (HARD LIMIT - DO NOT EXCEED THIS)
-✓ EACH PAGE: {settings.MIN_WORDS_PER_PAGE}+ words of detailed, comprehensive content
+✓ EACH PAGE: {settings.MIN_WORDS_PER_PAGE}+ words of substantive legal content
 
-⚠️  CRITICAL: If you generate MORE than {max_pages} pages, the document will be TRUNCATED
-⚠️  DO NOT generate a short or incomplete document
-⚠️  DO NOT expect expansion or regeneration later  
-⚠️  THIS IS YOUR ONLY CHANCE - make it complete and comprehensive NOW
-⚠️  DO NOT exceed {max_pages} pages - this is a HARD LIMIT
+⚠️  CRITICAL: If you generate MORE than {max_pages} pages, the document will be TRUNCATED to {max_pages}
+⚠️  Pack ALL mandatory clauses densely within {min_pages} pages — densify, do not add pages
+⚠️  DO NOT expect expansion or regeneration later
+⚠️  THIS IS YOUR ONLY CHANCE - make it complete and compliant WITHIN {min_pages} pages
 ⚠️  AIM FOR EXACTLY {min_pages} PAGES - this is what the user requested
 
 If you generate less than {min_pages} pages or fewer than {settings.MIN_WORDS_PER_PAGE} words per page,
@@ -544,7 +561,7 @@ the document will FAIL validation and the user will have to wait for regeneratio
 
 If you generate MORE than {max_pages} pages, the document will be automatically truncated to {max_pages} pages.
 
-BE VERBOSE. BE DETAILED. BE COMPREHENSIVE. Generate exactly {min_pages} pages (or up to {max_pages} if needed for completeness).
+Generate exactly {min_pages} pages. Stay complete and legally sound without exceeding the page limit.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Requirements:
@@ -832,14 +849,14 @@ Respond with ONLY the JSON document structure, no additional text. Start with {{
                     "NO foreign jurisdiction clauses - MUST use Ethiopian courts",
                 ],
                 "mandatory_clauses": [
-                    "Governing law: Ethiopian Commercial Code (1960) and Ethiopian law",
+                    "Governing law: Ethiopian Commercial Code (Proclamation No. 1243/2021) and Ethiopian law",
                     "Jurisdiction: Ethiopian courts for dispute resolution",
                     "Tax obligations under Ethiopian tax law",
                     "Partnership registration requirements under Ethiopian law",
                     "Profit and loss distribution terms",
                     "Partnership dissolution procedures",
                 ],
-                "compliance_focus": "Ethiopian Commercial Code (1960) compliance"
+                "compliance_focus": "Ethiopian Commercial Code (Proclamation No. 1243/2021) compliance"
             }
         
         # NDA specific rules
@@ -910,6 +927,24 @@ Respond with ONLY the JSON document structure, no additional text. Start with {{
                 "compliance_focus": "Ethiopian legal framework compliance (Commercial Code, Civil Code, Constitution)"
             }
 
+    def _governing_law_jurisdiction_lines(self, language: str) -> str:
+        """Language-aware governing law / jurisdiction / execution MUST lines."""
+        lang = normalize_language_code(language or "en")
+        if lang == "am":
+            return (
+                f'✓ ተፈጻሚ ሕግ: "{self.AMHARIC_GOVERNING_LAW}"\n'
+                f'✓ ሥልጣን: "{self.AMHARIC_JURISDICTION}"\n'
+                f'✓ ፊርማ/አፈጻጸም ክፍል መዝጊያ: "{self.AMHARIC_EXECUTION}"'
+            )
+        return (
+            '✓ Governing law clause MUST state: "This agreement shall be governed by and '
+            'construed in accordance with the laws of Ethiopia"\n'
+            '✓ Jurisdiction clause MUST state: "Any disputes arising from this agreement shall '
+            'be subject to the exclusive jurisdiction of Ethiopian courts"\n'
+            '✓ Signature/Execution closing: "IN WITNESS WHEREOF, the parties have executed '
+            'this Agreement as of the date first written above."'
+        )
+
     def _build_compliance_requirements(self, document_type: str, language: str) -> str:
         """Build compliance requirements section for the generation prompt."""
         rules = self._get_document_type_compliance_rules(document_type)
@@ -933,7 +968,7 @@ Respond with ONLY the JSON document structure, no additional text. Start with {{
 DOCUMENT LANGUAGE: Write all clause text in {lang_name}.
 
 ALL CLAUSES IN THIS DOCUMENT MUST COMPLY WITH ETHIOPIAN LEGAL FRAMEWORK:
-- Ethiopian Commercial Code (1960)
+- Ethiopian Commercial Code (Proclamation No. 1243/2021)
 - Ethiopian Civil Code (1960)
 - Ethiopian Labor Law (Proclamation No. 1156/2019)
 - Ethiopian Investment Law (Proclamation No. 1180/2020)
@@ -948,8 +983,7 @@ MANDATORY CLAUSES - MUST BE INCLUDED:
 {mandatory_text}
 
 GOVERNING LAW AND JURISDICTION (CRITICAL):
-✓ Governing law clause MUST state: "This agreement shall be governed by and construed in accordance with the laws of Ethiopia"
-✓ Jurisdiction clause MUST state: "Any disputes arising from this agreement shall be subject to the exclusive jurisdiction of Ethiopian courts"
+{self._governing_law_jurisdiction_lines(language)}
 ✓ DO NOT use foreign law (US law, Delaware law, California law, etc.) - this will result in CRITICAL non-compliance
 ✓ DO NOT use foreign jurisdiction - this will result in CRITICAL non-compliance
 

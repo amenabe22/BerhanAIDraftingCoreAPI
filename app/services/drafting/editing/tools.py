@@ -27,6 +27,40 @@ class ApplyDocumentEditInput(BaseModel):
     )
 
 
+class ClarificationOptionInput(BaseModel):
+    id: str = Field(description="Stable option id, e.g. shorter")
+    label: str = Field(description="Short user-visible label")
+
+
+class ClarificationQuestionInput(BaseModel):
+    id: str = Field(description="Stable question id, e.g. q1")
+    prompt: str = Field(description="Short question shown to the user")
+    kind: str = Field(
+        default="single_choice",
+        description="single_choice (radio) or text (free-form)",
+    )
+    options: list[ClarificationOptionInput] = Field(
+        default_factory=list,
+        description="2-5 options when kind is single_choice",
+    )
+    allow_other: bool = Field(
+        default=True,
+        description="When true, UI shows an Other write-in for single_choice",
+    )
+
+
+class AskClarifyingQuestionsInput(BaseModel):
+    response_message: str = Field(
+        default="",
+        description="Short friendly intro shown above the form (1-2 sentences).",
+    )
+    questions: list[ClarificationQuestionInput] = Field(
+        description="1-3 clarifying questions. Prefer single_choice with options.",
+        min_length=1,
+        max_length=3,
+    )
+
+
 def _run_async(coro):
     """Run an async coroutine from a sync tool context."""
     try:
@@ -128,10 +162,77 @@ def create_apply_document_edit_tool() -> StructuredTool:
         func=_apply_document_edit_impl,
         name="apply_document_edit",
         description=(
-            "Apply an edit to the user's open document. Call this when the user "
-            "wants the document changed (rewrite, shorten, add, remove, fix, etc.), "
-            "including follow-ups that confirm a prior suggestion. Do not call for "
-            "pure questions or explanations. Pass a clear, self-contained instruction."
+            "Apply an edit to the user's open document. Call when the user wants "
+            "the document changed: rewrite, shorten, expand, enrich, clarify, "
+            "strengthen, add, remove, fix, more detail / legal-technical content, "
+            "including follow-ups that confirm a prior suggestion. Do not call only "
+            "for pure informational questions with no document-change intent "
+            "(e.g. what does this mean?). Pass a clear, self-contained instruction."
         ),
         args_schema=ApplyDocumentEditInput,
+    )
+
+
+def _ask_clarifying_questions_impl(
+    response_message: str = "",
+    questions: list[Any] | None = None,
+) -> str:
+    """Emit structured clarification_needed for the FE form UI."""
+    from app.services.generation.clarification_questions import normalize_questions
+
+    raw_questions: list[Any] = []
+    for q in questions or []:
+        if hasattr(q, "model_dump"):
+            raw_questions.append(q.model_dump())
+        elif isinstance(q, dict):
+            raw_questions.append(q)
+        else:
+            raw_questions.append(q)
+
+    normalized = normalize_questions(raw_questions, max_questions=3)
+    if not normalized:
+        return json.dumps(
+            {
+                "ok": False,
+                "reason": "No valid clarifying questions were provided.",
+            }
+        )
+
+    intro = (response_message or "").strip()
+    _emit_custom(
+        {
+            "type": "clarification_needed",
+            "response_message": intro,
+            "response": intro,
+            "questions": normalized,
+            "ready_to_generate": False,
+        }
+    )
+    return json.dumps(
+        {
+            "ok": True,
+            "awaiting_user": True,
+            "questions_count": len(normalized),
+            "message": (
+                "Clarifying questions were shown to the user as a form. "
+                "Wait for their next message with answers — do not invent answers."
+            ),
+        }
+    )
+
+
+def create_ask_clarifying_questions_tool() -> StructuredTool:
+    """Create ask_clarifying_questions — structured radio/text form for the client."""
+    return StructuredTool.from_function(
+        func=_ask_clarifying_questions_impl,
+        name="ask_clarifying_questions",
+        description=(
+            "Ask the user 1-3 clarifying questions with selectable options when you "
+            "need a choice before editing or answering. Prefer single_choice with "
+            "2-5 short options and allow_other true. Use text kind only for open "
+            "answers (names, amounts). Do NOT ask clarifying questions as plain "
+            "prose in your reply when options are natural — call this tool instead. "
+            "Do not call this when the user already asked to apply a clear edit."
+        ),
+        args_schema=AskClarifyingQuestionsInput,
     )
