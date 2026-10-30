@@ -7,6 +7,7 @@ import pytest
 from app.services.drafting.editing.retrieval import (
     build_document_skeleton,
     expand_section_blocks,
+    match_named_section_headings,
     merge_candidate_blocks,
     structural_candidate_blocks,
 )
@@ -69,6 +70,22 @@ def test_merge_candidate_blocks_dedupes():
     merged = merge_candidate_blocks(a, b)
     assert [x["block_id"] for x in merged] == ["p1", "p2", "p3"]
     assert merged[1]["text"] == "b"
+
+
+def test_match_named_section_headings_amharic_multi():
+    outline = [
+        {"block_id": "h3", "level": 2, "title": "3. ትርፍ እና ኪሳራ መጋራት"},
+        {"block_id": "h4", "level": 2, "title": "4. የውሳኔ አሰጣጥ ሂደቶች"},
+        {"block_id": "h5", "level": 2, "title": "5. የአስተዳደር"},
+        {"block_id": "h8", "level": 2, "title": "8. የክርክር መፍቻ"},
+    ]
+    instruction = (
+        "ትርፍ እና ኪሳራ መጋራት, 4. የውሳኔ አሰጣጥ ሂደቶች and some more focus on 8. የክርክር መፍቻ"
+    )
+    matched = match_named_section_headings(instruction, outline)
+    ids = [h["block_id"] for h in matched]
+    assert ids == ["h3", "h4", "h8"]
+    assert "h5" not in ids
 
 
 def test_expand_section_blocks_includes_body_until_next_heading():

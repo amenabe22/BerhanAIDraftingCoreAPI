@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_LEADING_SECTION_NUM_RE = re.compile(
+    r"^(\d+)\s*[.):\-–—]\s*(.*)$",
+    re.UNICODE,
+)
+_WS_RE = re.compile(r"\s+", re.UNICODE)
 
 _PREFILTER_THRESHOLD = 50
 
@@ -350,3 +357,68 @@ def merge_candidate_blocks(
             seen.add(bid)
             merged.append(b)
     return merged
+
+
+def _norm_match_text(value: str) -> str:
+    return _WS_RE.sub(" ", (value or "").strip().lower())
+
+
+def _split_section_title(title: str) -> tuple[str | None, str]:
+    """Return (leading_number, remainder) for titles like ``3. Profit sharing``."""
+    raw = (title or "").strip()
+    m = _LEADING_SECTION_NUM_RE.match(raw)
+    if not m:
+        return None, raw
+    return m.group(1), (m.group(2) or "").strip()
+
+
+def match_named_section_headings(
+    instruction: str,
+    outline: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Match outline headings referenced in an instruction (language-agnostic).
+
+    Detects numbered titles (``3. …``, ``4) …``) and substantial title substrings
+    so multi-section follow-ups like ``expand 3. X, 4. Y and 8. Z`` resolve to
+    heading seeds instead of a single semantic hit.
+    """
+    instr = _norm_match_text(instruction)
+    if not instr or not outline:
+        return []
+
+    matched: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for heading in outline:
+        bid = heading.get("block_id")
+        title = heading.get("title") or ""
+        if not bid or bid in seen:
+            continue
+        norm_title = _norm_match_text(title)
+        num, remainder = _split_section_title(title)
+        norm_remainder = _norm_match_text(remainder)
+
+        hit = False
+        if norm_title and len(norm_title) >= 4 and norm_title in instr:
+            hit = True
+        elif norm_remainder and len(norm_remainder) >= 4 and norm_remainder in instr:
+            hit = True
+        elif num:
+            # Numbered reference: "4." / "4)" / "section 4" near this heading's words
+            num_patterns = (
+                rf"(?<!\d){re.escape(num)}\s*[.):\-–—]",
+                rf"(?<!\d){re.escape(num)}(?!\d)",
+            )
+            number_mentioned = any(re.search(p, instr) for p in num_patterns)
+            if number_mentioned and norm_remainder:
+                # Prefer titles whose distinctive tokens also appear (avoids bare "3" noise)
+                tokens = [t for t in norm_remainder.split() if len(t) >= 3]
+                if not tokens or any(t in instr for t in tokens):
+                    hit = True
+            elif number_mentioned and not norm_remainder:
+                hit = True
+
+        if hit:
+            seen.add(bid)
+            matched.append(dict(heading))
+
+    return matched

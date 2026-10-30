@@ -47,18 +47,22 @@ Respond with JSON only:
 Dimensional rules (language-agnostic — reason from intent + skeleton features, not keywords):
 - spatial_scope=pinpoint + selection_mode=semantic: one clause/paragraph; list that block in targets.
 - spatial_scope=section + selection_mode=explicit_section: one named part; target the HEADING block_id
-  (pipeline expands to section body). Set scope=section.
-- spatial_scope=multi_section|document_wide OR selection_mode=structural|hybrid:
-  Prefer selecting body blocks that match structural_intent using skeleton features
+  from the Outline (pipeline expands to section body). Set scope=section.
+- spatial_scope=multi_section + selection_mode=explicit_section: instruction names TWO OR MORE
+  outline headings (by number and/or title, any language). List ALL matching HEADING block_ids
+  from the Outline in targets. Do NOT use thinness. Set scope=multiple. Never claim a heading
+  is missing if it appears in the Outline.
+- spatial_scope=document_wide OR selection_mode=structural|hybrid (no specific section names):
+  Prefer body blocks that match structural_intent using skeleton features
   (below_median / bottom_quartile / relative_thinness). Set thinness accordingly.
   List ALL matching body block_ids from candidates/features in targets (or leave targets empty
   if the pipeline should apply the structural filter — set confidence >= 0.6 and
   selection_mode=structural). Set scope=multiple.
 - For find/replace of the same string everywhere: scope=global, spatial_scope=document_wide,
   selection_mode=semantic, list matching blocks.
-- Use confidence >= 0.7 when sure; for broad structural edits, confidence 0.6–0.85 is fine
-  when thinness + outline clearly support the intent.
-- block_id MUST be copied exactly from candidates or body_features — never invented.
+- Use confidence >= 0.7 when sure; for broad structural or multi-section named edits,
+  confidence 0.6–0.85 is fine when outline/features support the intent.
+- block_id MUST be copied exactly from Outline / candidates / body_features — never invented.
 - If the instruction is an edit but you cannot pick specific ids, still set spatial_scope /
   selection_mode / thinness / edit_intent so the pipeline can resolve structurally.
   Only use confidence 0 with empty plan fields when the message is not an edit at all."""
@@ -133,7 +137,7 @@ CRITICAL RULES:
 3. For insert: payload must include new_text and position (before|after).
 4. For replace/rewrite: payload must include new_text with the FULL new block text.
 5. For expand/clarify/strengthen/"more detail": emit replace or expand with LONGER, complete legal prose in new_text — never empty operations and never reply with advice instead of ops.
-6. When multiple target blocks are listed (document-wide / multi-section expand or shorten), emit ONE operation per target body block that needs change. Do not collapse into a single op or reply with advice.
+6. When multiple target blocks are listed (document-wide / multi-section expand or shorten), emit ONE operation per target body block that needs change — especially when several named sections are in context. Do not collapse into a single op, skip named sections, or reply with advice.
 7. Only modify blocks required by the instruction — do not touch unrelated blocks.
 8. Do NOT invent block_ids. Do NOT modify blocks outside the target list unless scope is global.
 9. When shortening or simplifying legal text, preserve mandatory legal references (proclamation numbers, article citations, defined terms, and party obligations). Condense wording, do not remove substantive legal requirements.

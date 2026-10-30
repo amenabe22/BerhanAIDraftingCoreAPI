@@ -265,6 +265,80 @@ async def test_document_wide_structural_expand_selects_thin_bodies():
 
 
 @pytest.mark.asyncio
+async def test_named_multi_section_expand_targets_all_headings():
+    """Follow-up naming several outline sections must seed all headings, not one body."""
+    from tests.fixtures.tiptap_docs import make_block
+
+    doc = {
+        "type": "doc",
+        "content": [
+            make_block("h3", "3. ትርፍ እና ኪሳራ መጋራት", block_type="heading", level=2),
+            make_block("p3", "አጭር ትርፍ ክፍል።"),
+            make_block("h4", "4. የውሳኔ አሰጣጥ ሂደቶች", block_type="heading", level=2),
+            make_block("p4", "አጭር ውሳኔ ክፍል።"),
+            make_block("h8", "8. የክርክር መፍቻ", block_type="heading", level=2),
+            make_block("p8", "አጭር ክርክር ክፍል።"),
+            make_block("h5", "5. ሌላ", block_type="heading", level=2),
+            make_block("p5", "አይነካም።"),
+        ],
+    }
+    blocks = extract_blocks_from_tiptap(doc)
+    agent = SemanticEditAgent()
+    instruction = (
+        "ትርፍ እና ኪሳራ መጋራት, 4. የውሳኔ አሰጣጥ ሂደቶች and some more focus on 8. የክርክር መፍቻ"
+    )
+
+    async def fake_complete_json(system: str, user: str):
+        # Named multi-section path should not need locate LLM
+        if "selector" in system.lower():
+            raise AssertionError("locate LLM should be skipped for >=2 named headings")
+        if "verify" in system.lower():
+            return make_mock_verify_result(True)
+        ops = []
+        for bid, text in (
+            ("p3", "የተዘረጋ የትርፍ እና ኪሳራ መጋራት ዝርዝር ህጋዊ ጽሑፍ።"),
+            ("p4", "የተዘረጋ የውሳኔ አሰጣጥ ሂደቶች ዝርዝር ህጋዊ ጽሑፍ።"),
+            ("p8", "የተዘረጋ የክርክር መፍቻ ዝርዝር ህጋዊ ጽሑፍ።"),
+        ):
+            if bid in user:
+                ops.append(
+                    {
+                        "op_id": f"op{bid}",
+                        "type": "expand",
+                        "block_id": bid,
+                        "payload": {"new_text": text},
+                    }
+                )
+        return {"operations": ops}
+
+    with (
+        patch(
+            "app.services.drafting.editing.agent.rank_blocks_for_instruction",
+            return_value=blocks,
+        ),
+        patch(
+            "app.services.drafting.editing.agent.edit_llm.complete_json",
+            side_effect=fake_complete_json,
+        ),
+        patch(
+            "app.services.drafting.editing.agent.edit_llm.complete_text",
+            new=AsyncMock(return_value="Expanded named sections."),
+        ),
+    ):
+        result = await agent.edit_document(
+            doc, instruction=instruction, document_language="am"
+        )
+
+    assert result["no_effective_change"] is False
+    named = result["metrics"]["stages"].get("named_sections") or []
+    assert {n["block_id"] for n in named} == {"h3", "h4", "h8"}
+    assert result["metrics"]["stages"].get("section_expand")
+    op_ids = {op["block_id"] for op in result["operations"]}
+    assert op_ids == {"p3", "p4", "p8"}
+    assert "p5" not in op_ids
+
+
+@pytest.mark.asyncio
 async def test_pinpoint_locate_still_uses_semantic_single_target(en_doc):
     """Regression: named-clause edits stay on the semantic top-K path."""
     agent = SemanticEditAgent()

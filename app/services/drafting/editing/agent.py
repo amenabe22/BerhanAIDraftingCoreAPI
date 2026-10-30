@@ -25,6 +25,7 @@ from app.services.drafting.editing.prompts import (
 from app.services.drafting.editing.retrieval import (
     build_document_skeleton,
     expand_section_blocks,
+    match_named_section_headings,
     merge_candidate_blocks,
     neighbor_blocks,
     rank_blocks_for_instruction,
@@ -135,19 +136,24 @@ class SemanticEditAgent:
 
             # Section expand: heading seeds → full section body (fixes multi-block
             # requests like "shorten DEFINITIONS" that previously got tiny context).
-            # Skip expand when structural multi-body targets were already resolved.
+            # Skip expand when structural multi-body targets were already resolved
+            # (thin body ids), but always expand named heading seeds.
             selection_mode = (locate_result or {}).get("selection_mode") or "semantic"
             spatial_scope = (locate_result or {}).get("spatial_scope") or "pinpoint"
             seed_blocks = [b for b in all_blocks if b["block_id"] in target_ids]
             has_heading_seed = any(b.get("type") == "heading" for b in seed_blocks)
-            structural_multi = selection_mode in ("structural", "hybrid") or spatial_scope in (
-                "document_wide",
-                "multi_section",
+            named_multi = selection_mode == "explicit_section" and (
+                spatial_scope == "multi_section" or len(target_ids) > 1
             )
-            if (
-                not structural_multi
-                and (scope in ("multiple", "section", "global") or has_heading_seed)
-            ) or (has_heading_seed and selection_mode == "explicit_section"):
+            structural_body_multi = selection_mode in ("structural", "hybrid") or (
+                spatial_scope == "document_wide" and selection_mode != "explicit_section"
+            )
+            # multi_section + explicit_section = named headings → expand; structural thinness → don't
+            if has_heading_seed and (
+                named_multi
+                or selection_mode == "explicit_section"
+                or not structural_body_multi
+            ):
                 expanded_ids = expand_section_blocks(all_blocks, target_ids)
                 if expanded_ids != target_ids:
                     metrics["stages"]["section_expand"] = {
@@ -156,9 +162,15 @@ class SemanticEditAgent:
                     }
                     target_ids = expanded_ids
                     if scope == "single":
-                        scope = "section"
+                        scope = "section" if len(target_ids) <= 3 else "multiple"
+                    elif named_multi:
+                        scope = "multiple"
 
-            if scope == "global" and not structural_multi:
+            structural_multi = structural_body_multi or (
+                spatial_scope == "multi_section" and selection_mode != "explicit_section"
+            )
+
+            if scope == "global" and not structural_multi and not named_multi:
                 edit_context = [
                     b
                     for b in all_blocks
@@ -168,7 +180,12 @@ class SemanticEditAgent:
                         if len(tok) > 3
                     )
                 ] or ranked[:10]
-            elif scope in ("section", "multiple") or len(target_ids) > 3 or structural_multi:
+            elif (
+                scope in ("section", "multiple")
+                or len(target_ids) > 3
+                or structural_multi
+                or named_multi
+            ):
                 # Full section / multi-target context — no 3-block neighbor cap.
                 id_order = {b["block_id"]: i for i, b in enumerate(all_blocks)}
                 edit_context = sorted(
@@ -177,9 +194,30 @@ class SemanticEditAgent:
                 )
                 max_section = settings.EDIT_SECTION_MAX_BLOCKS
                 if max_section and len(edit_context) > max_section:
-                    edit_context = edit_context[:max_section]
+                    if named_multi and has_heading_seed:
+                        # Fair per-section budget so later named sections aren't dropped
+                        heading_seeds = [
+                            b["block_id"]
+                            for b in seed_blocks
+                            if b.get("type") == "heading"
+                        ]
+                        per = max(3, max_section // max(1, len(heading_seeds)))
+                        kept: list[dict[str, Any]] = []
+                        for hid in heading_seeds:
+                            section_ids = expand_section_blocks(all_blocks, {hid})
+                            section_blocks = [
+                                b
+                                for b in edit_context
+                                if b["block_id"] in section_ids
+                            ]
+                            kept.extend(section_blocks[:per])
+                            if len(kept) >= max_section:
+                                break
+                        edit_context = kept[:max_section]
+                    else:
+                        edit_context = edit_context[:max_section]
                     target_ids = {b["block_id"] for b in edit_context}
-                if structural_multi and scope == "single":
+                if (structural_multi or named_multi) and scope == "single":
                     scope = "multiple"
             else:
                 edit_context = neighbor_blocks(all_blocks, target_ids, window=1)
@@ -293,9 +331,31 @@ class SemanticEditAgent:
             return data
 
         def _needs_structural(plan: dict[str, Any]) -> bool:
+            # Named outline headings use explicit_section even with multi_section scope —
+            # never replace those heading seeds with thin-body structural filters.
+            if plan.get("selection_mode") == "explicit_section":
+                return False
             return (plan.get("selection_mode") in ("structural", "hybrid")) or (
                 plan.get("spatial_scope") in ("document_wide", "multi_section")
             )
+
+        def _infer_edit_action(plan: dict[str, Any] | None = None) -> str:
+            intent = ((plan or {}).get("edit_intent") or "").lower()
+            if intent in ("expand", "shorten", "rewrite", "replace"):
+                return "expand" if intent == "expand" else intent
+            lower = instruction.lower()
+            expand_hints = (
+                "expand",
+                "enrich",
+                "more detail",
+                "አስፋ",
+                "ማስፋት",
+                "አብራራ",
+                "በዝርዝር",
+            )
+            if any(h in lower or h in instruction for h in expand_hints):
+                return "expand"
+            return "rewrite"
 
         def _resolve_from_plan(
             plan: dict[str, Any],
@@ -306,6 +366,13 @@ class SemanticEditAgent:
             scope = plan.get("scope") or "single"
             confidence = float(plan.get("confidence") or 0.0)
             thinness = plan.get("thinness") or "below_median"
+
+            # Preserve heading targets for named sections (do not filter vs body structural ids)
+            if plan.get("selection_mode") == "explicit_section" and targets:
+                if len(targets) > 1:
+                    scope = "multiple"
+                    confidence = max(confidence, 0.75)
+                return targets, scope, confidence
 
             if _needs_structural(plan):
                 structural = structural_candidate_blocks(
@@ -358,6 +425,37 @@ class SemanticEditAgent:
 
             return targets, scope, confidence
 
+        # Deterministic named-section resolve (before LLM) for multi-heading instructions
+        named_headings = match_named_section_headings(
+            instruction, skeleton.get("outline") or []
+        )
+        if len(named_headings) >= 2:
+            action = _infer_edit_action()
+            plan = _normalize_locate(
+                {
+                    "spatial_scope": "multi_section",
+                    "selection_mode": "explicit_section",
+                    "structural_intent": "named outline headings listed in the instruction",
+                    "edit_intent": action if action in ("expand", "shorten", "rewrite") else "expand",
+                    "targets": [
+                        {
+                            "block_id": h["block_id"],
+                            "action": action,
+                            "confidence": 0.9,
+                            "reason": f"named_section:{h.get('title') or h['block_id']}",
+                        }
+                        for h in named_headings
+                    ],
+                    "scope": "multiple",
+                    "confidence": 0.9,
+                }
+            )
+            metrics["stages"]["named_sections"] = [
+                {"block_id": h["block_id"], "title": h.get("title")} for h in named_headings
+            ]
+            metrics["stages"]["locate"] = plan
+            return plan, list(plan["targets"]), "multiple", 0.9
+
         selector_k = settings.EDIT_SELECTOR_TOP_K
         locate_result = await edit_llm.complete_json(
             locate_system_prompt(),
@@ -368,6 +466,25 @@ class SemanticEditAgent:
             ),
         )
         plan = _normalize_locate(locate_result)
+        # Single named heading: seed explicit_section when LLM returned no targets
+        if len(named_headings) == 1 and not (plan.get("targets") or []):
+            action = _infer_edit_action(plan)
+            plan["spatial_scope"] = "section"
+            plan["selection_mode"] = "explicit_section"
+            plan["scope"] = "section"
+            h = named_headings[0]
+            plan["targets"] = [
+                {
+                    "block_id": h["block_id"],
+                    "action": action,
+                    "confidence": 0.85,
+                    "reason": f"named_section:{h.get('title') or h['block_id']}",
+                }
+            ]
+            plan["confidence"] = max(float(plan.get("confidence") or 0), 0.8)
+            metrics["stages"]["named_sections"] = [
+                {"block_id": h["block_id"], "title": h.get("title")}
+            ]
         metrics["stages"]["locate"] = plan
 
         # Enrich candidates for hybrid/structural before resolve
