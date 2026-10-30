@@ -22,6 +22,7 @@ from app.services.drafting.editing.prompts import (
     verify_system_prompt,
     verify_user_prompt,
 )
+from app.services.drafting.editing.financial_figures import extract_financial_figures
 from app.services.drafting.editing.retrieval import (
     build_document_skeleton,
     expand_section_blocks,
@@ -46,6 +47,14 @@ logger = logging.getLogger(__name__)
 
 _GLOBAL_REPLACE_RE = re.compile(
     r"(?:change|replace|swap)\s+(.+?)\s+(?:to|with)\s+(.+?)(?:\s+(?:everywhere|throughout|in all|globally))?$",
+    re.IGNORECASE,
+)
+
+_FINANCIAL_EDIT_RE = re.compile(
+    r"(?:financial|amount|payment|penalty|fee|capital|contribution|"
+    r"ገንዘብ|ብር|ETB|አስተዋጾ|ክፍያ|ቅጣት|ድርሻ|"
+    r"(?:lower|reduce|halve|raise|increase|change).{0,40}(?:\d+\s*%|half|50))"
+    r"|(?:\d+\s*%).{0,40}(?:lower|reduce|halve|raise|financial|amount)",
     re.IGNORECASE,
 )
 
@@ -111,6 +120,20 @@ class SemanticEditAgent:
             t0 = time.perf_counter()
             skeleton = build_document_skeleton(all_blocks)
             ranked = rank_blocks_for_instruction(instruction, all_blocks)
+            if _FINANCIAL_EDIT_RE.search(instruction or ""):
+                amount_hits = extract_financial_figures(doc_json)
+                # Prefer real amount-bearing blocks over semantic near-misses
+                by_id = {b.get("block_id"): b for b in all_blocks}
+                money_blocks: list[dict[str, Any]] = []
+                for hit in amount_hits:
+                    bid = hit.get("block_id")
+                    if bid and bid in by_id:
+                        blk = dict(by_id[bid])
+                        blk["rerank_score"] = max(float(blk.get("rerank_score") or 0), 0.99)
+                        money_blocks.append(blk)
+                if money_blocks:
+                    ranked = merge_candidate_blocks(money_blocks, ranked)
+                    metrics["stages"]["financial_figure_boost"] = len(money_blocks)
             metrics["stages"]["rerank_ms"] = int((time.perf_counter() - t0) * 1000)
             metrics["stages"]["skeleton_stats"] = skeleton.get("stats")
 

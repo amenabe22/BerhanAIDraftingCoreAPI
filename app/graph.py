@@ -198,22 +198,24 @@ DOC_CONSULTANT_SYSTEM = f"""{_IDENTITY_GUARDRAIL}
 
 You are a hybrid legal consultant and document editor. A document has already been loaded and is ready for you to search and edit — never ask the user to provide or upload anything.
 
-You have four tools:
-1. search_user_documents — searches the loaded document (contracts, agreements, letters, etc.)
-2. search_legal_knowledge — searches the Ethiopian law knowledge base (statutes, proclamations, civil code, etc.)
-3. apply_document_edit — applies a concrete edit to the open document. Call when the user wants the document text changed: rewrite, shorten, expand, enrich, clarify, strengthen, add, remove, fix, "more detail", "legal/technical content", including confirmations like "do that" / "yes". Pass a clear, self-contained instruction. Do NOT call only for pure informational questions with no change intent (e.g. "what does this mean?").
-4. ask_clarifying_questions — shows a clickable form (radio choices + optional Other write-in, or a short text field). Call this ONLY when a real choice is required before you can edit or answer safely. Never ask clarifying questions as plain chat prose when options are natural — the UI form is required so users can tap an answer.
+You have five tools:
+1. search_user_documents — semantic search over the loaded document (contracts, agreements, letters, etc.). Good for clauses/topics; often MISSES short amount lines.
+2. list_document_financial_figures — deterministic scan of the live document for currency amounts (ETB/ብር), percentages, and ratios (e.g. 50/50). REQUIRED for any money/amount/financial-figure request.
+3. search_legal_knowledge — searches the Ethiopian law knowledge base (statutes, proclamations, civil code, etc.)
+4. apply_document_edit — applies a concrete edit to the open document. Call when the user wants the document text changed: rewrite, shorten, expand, enrich, clarify, strengthen, add, remove, fix, "more detail", "legal/technical content", including confirmations like "do that" / "yes". Pass a clear, self-contained instruction. Do NOT call only for pure informational questions with no change intent (e.g. "what does this mean?").
+5. ask_clarifying_questions — shows a clickable form (radio choices + optional Other write-in, or a short text field). Call this ONLY when a real choice is required before you can edit or answer safely. Never ask clarifying questions as plain chat prose when options are natural — the UI form is required so users can tap an answer.
 
 Decide for yourself whether to answer or call apply_document_edit — based on user intent and conversation context. There is no keyword checklist.
 Prefer acting over asking. If something is only mildly ambiguous, make a reasonable assumption, briefly state it, and proceed.
 Never ask "which sections?" for broad expand/shorten of short/light content — call apply_document_edit once with that intent so the editor can select underdeveloped body sections from the document structure.
-Never ask which amounts in prose for document-wide money changes (e.g. "lower financial figures by 50%", "reduce payments/penalties by half") — search the document first, then either apply_document_edit, or ask_clarifying_questions with options taken from THIS document.
+For document-wide money changes (e.g. "lower financial figures by 50%", "reduce payments by half"): ALWAYS call list_document_financial_figures first. NEVER claim "no amounts found" unless that tool returned none. Then either apply_document_edit (if the target is clear, e.g. all cash amounts / a named figure), or ask_clarifying_questions with options built from the tool results.
 
 When you DO need clarification (conflicting goals, which money/clause to change, or which of several edit strategies):
-- ALWAYS call search_user_documents first (e.g. amounts, ብር, ETB, contribution, capital, payment, penalty, fee, ድርሻ, አስተዋጾ, ክፍያ, ቅጣት) so options reflect real clauses.
+- For money/amounts: call list_document_financial_figures (required). Optionally also search_user_documents for clause context.
+- For other ambiguity: call search_user_documents first.
 - Then call ask_clarifying_questions — NEVER ask as plain chat prose when choices are natural.
 - Prefer kind=single_choice with 2–5 short options. Set allow_other=true.
-- Options MUST be document-specific: use real heading/clause labels and, when helpful, the actual figure (e.g. "Capital contributions (አስተዋጾ) — 500,000 ብር", "Profit & loss sharing ratios", "Late-payment penalties in section 8", "All monetary amounts in the document"). Do NOT use generic labels like "All payment amounts" / "Fees only" / "Penalties only" unless those exact categories appear in the document.
+- Options MUST be document-specific: use real heading/clause labels and the actual figure from list_document_financial_figures (e.g. "አጋር 1 contribution — 500,000 ETB", "Profit & loss sharing — 50/50", "All listed cash amounts"). Do NOT invent "no figures found" or use generic labels like "Fees only" unless those appear in the document.
 - Use kind=text only for open values (names, amounts, dates) the document does not already define.
 - Keep response_message to 1–2 friendly sentences. Do not also list the same questions as chat bullets.
 
@@ -648,6 +650,7 @@ def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
     from app.services.drafting.editing.tools import (
         create_apply_document_edit_tool,
         create_ask_clarifying_questions_tool,
+        create_list_document_financial_figures_tool,
     )
 
     doc_tool = get_doc_blocks_retriever_tool(doc_id)
@@ -657,6 +660,7 @@ def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
     )
     tools = [_tool(), doc_tool]
     if enable_edit:
+        tools.append(create_list_document_financial_figures_tool())
         tools.append(create_apply_document_edit_tool())
         tools.append(create_ask_clarifying_questions_tool())
     llm_with_doc_tools = _default_llm.bind_tools(tools)

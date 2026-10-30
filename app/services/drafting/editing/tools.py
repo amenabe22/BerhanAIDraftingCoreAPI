@@ -240,14 +240,51 @@ def create_ask_clarifying_questions_tool() -> StructuredTool:
         name="ask_clarifying_questions",
         description=(
             "Ask the user 1-3 clarifying questions with selectable options when you "
-            "need a choice before editing or answering. ALWAYS search the document "
-            "first, then build single_choice options from real clauses/amounts found "
-            "(section titles + figures, e.g. contributions, profit share, penalties). "
-            "Prefer 2-5 short document-specific options and allow_other true. Avoid "
-            "generic labels like 'fees only' unless that wording is in the document. "
-            "Use text kind only for open answers (names, new amounts). Do NOT ask as "
-            "plain prose when options are natural. Do not call when the edit target "
-            "is already clear."
+            "need a choice before editing or answering. For money/amount requests, "
+            "ALWAYS call list_document_financial_figures first and build options from "
+            "those hits (section + amount). Prefer 2-5 short document-specific options "
+            "and allow_other true. Avoid generic labels like 'fees only' unless that "
+            "wording is in the document. Use text kind only for open answers (names, "
+            "new amounts). Do NOT ask as plain prose when options are natural. Do not "
+            "call when the edit target is already clear."
         ),
         args_schema=AskClarifyingQuestionsInput,
+    )
+
+
+def _list_document_financial_figures_impl() -> str:
+    """Scan live TipTap doc_json for currency amounts, %, and ratios."""
+    from app.services.drafting.editing.financial_figures import (
+        extract_financial_figures,
+        format_financial_figures_for_tool,
+    )
+
+    try:
+        cfg = get_config().get("configurable", {}) or {}
+    except Exception:
+        cfg = {}
+
+    doc_json = cfg.get("doc_json")
+    if not isinstance(doc_json, dict) or doc_json.get("type") != "doc":
+        return (
+            "No editable document JSON is available on this turn, so amounts "
+            "cannot be listed from the live document."
+        )
+
+    hits = extract_financial_figures(doc_json)
+    return format_financial_figures_for_tool(hits)
+
+
+def create_list_document_financial_figures_tool() -> StructuredTool:
+    """Create list_document_financial_figures — regex scan of live doc_json."""
+    return StructuredTool.from_function(
+        func=_list_document_financial_figures_impl,
+        name="list_document_financial_figures",
+        description=(
+            "List every monetary amount, currency figure (ETB/ብር/Birr), percentage, "
+            "and ratio (e.g. 50/50) found in the live open document. Call this BEFORE "
+            "claiming no amounts exist, and BEFORE ask_clarifying_questions or "
+            "apply_document_edit for any request to change, lower, raise, or review "
+            "financial figures. Semantic search alone often misses short amount lines."
+        ),
     )

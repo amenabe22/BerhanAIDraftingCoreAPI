@@ -365,12 +365,14 @@ async def _stream_endpoint(
                     _TOOL_LABELS = {
                         "search_user_documents": "Searching your document",
                         "search_legal_knowledge": "Searching Ethiopian law",
+                        "list_document_financial_figures": "Finding amounts in your document",
                         "apply_document_edit": "Drafting the edit",
                         "ask_clarifying_questions": "Asking a quick question",
                     }
                     _TOOL_KINDS = {
                         "search_user_documents": "search_doc",
                         "search_legal_knowledge": "search_law",
+                        "list_document_financial_figures": "search_doc",
                         "apply_document_edit": "edit",
                         "ask_clarifying_questions": "clarify",
                     }
