@@ -671,11 +671,16 @@ def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
             "doc agent step",
             extra={"event": "doc_agent_step", "message_count": len(messages), "phase": "invoke"},
         )
-        system = (
-            messages[0]
-            if messages and isinstance(messages[0], SystemMessage)
-            else SystemMessage(content=DOC_CONSULTANT_SYSTEM)
-        )
+        # Always use the current DOC_CONSULTANT_SYSTEM — do not keep a stale
+        # first-turn system message from the checkpointer (misses new tools).
+        # Preserve a LANGUAGE: prefix from the original system message if present.
+        system_content = DOC_CONSULTANT_SYSTEM
+        if messages and isinstance(messages[0], SystemMessage):
+            prior = messages[0].content or ""
+            if prior.startswith("LANGUAGE:"):
+                lang_line = prior.split("\n\n", 1)[0]
+                system_content = f"{lang_line}\n\n{DOC_CONSULTANT_SYSTEM}"
+        system = SystemMessage(content=system_content)
         messages_to_send = _trim(messages, system)
         response = _stream_llm_response(llm_with_doc_tools, messages_to_send)
 
@@ -731,14 +736,15 @@ def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
     return workflow.compile(checkpointer=MemorySaver())
 
 
-# Cache of compiled doc graphs keyed by (doc_id, enable_edit) so repeat requests
-# for the same document reuse the same graph (and its MemorySaver checkpointer).
-_doc_graphs: dict[tuple[str, bool], object] = {}
+# Cache of compiled doc graphs keyed by (doc_id, enable_edit, toolset_version).
+# Bump toolset_version when binding new tools so long-lived processes rebuild.
+_DOC_TOOLSET_VERSION = "financial_v1"
+_doc_graphs: dict[tuple[str, bool, str], object] = {}
 
 
 def get_doc_graph(doc_id: str, *, enable_edit: bool = True):
     """Return a cached compiled doc-graph for *doc_id*, building it if needed."""
-    key = (doc_id, enable_edit)
+    key = (doc_id, enable_edit, _DOC_TOOLSET_VERSION)
     if key not in _doc_graphs:
         _doc_graphs[key] = build_doc_graph(doc_id, enable_edit=enable_edit)
     return _doc_graphs[key]

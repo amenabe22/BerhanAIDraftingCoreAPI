@@ -103,6 +103,7 @@ def format_financial_figures_for_tool(hits: list[dict[str, Any]]) -> str:
         )
     lines = [
         f"Found {len(hits)} financial figure(s) in the live document. "
+        "These ARE in the document — never claim none were found. "
         "Use these for clarify options or edit instructions:"
     ]
     for i, h in enumerate(hits, 1):
@@ -112,3 +113,38 @@ def format_financial_figures_for_tool(hits: list[dict[str, Any]]) -> str:
             f"block_id={h.get('block_id')} snippet={h.get('snippet')!r}"
         )
     return "\n".join(lines)
+
+
+_FINANCIAL_INTENT_RE = re.compile(
+    r"(?:financial|amount|payment|penalty|fee|capital|contribution|"
+    r"ገንዘብ|ብር|ETB|አስተዋጾ|አስተዋጽኦ|ክፍያ|ቅጣት|ድርሻ|አሃዝ|"
+    r"(?:lower|reduce|halve|raise|increase|change|መቀነስ|ቀንስ).{0,48}"
+    r"(?:\d+\s*%|half|50|ግማሽ))"
+    r"|(?:\d+\s*%).{0,48}(?:lower|reduce|halve|raise|financial|amount|መቀነስ)",
+    re.IGNORECASE,
+)
+
+
+def looks_like_financial_edit(text: str) -> bool:
+    return bool(_FINANCIAL_INTENT_RE.search(text or ""))
+
+
+def augment_message_with_financial_figures(
+    message: str,
+    doc_json: dict[str, Any] | None,
+) -> str:
+    """Append live amount scan so the LLM cannot invent 'no figures found'."""
+    text = (message or "").strip()
+    if not text or not looks_like_financial_edit(text):
+        return message
+    # Already augmented by CoreAPI hybrid path
+    if "AUTHORITATIVE live document financial figures" in text or (
+        "Found " in text and "financial figure" in text
+    ):
+        return message
+    hits = extract_financial_figures(doc_json)
+    body = format_financial_figures_for_tool(hits)
+    return (
+        f"{text}\n\n---\nAUTHORITATIVE live document financial figures "
+        f"(do not claim none exist):\n{body}\n---"
+    )

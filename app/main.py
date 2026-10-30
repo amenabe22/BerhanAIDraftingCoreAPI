@@ -501,9 +501,17 @@ async def doc_agent_stream(request: DocChatRequest):
             request.language.value if hasattr(request.language, "value") else str(request.language)
         )
 
+    message = request.message
+    if enable_edit:
+        from app.services.drafting.editing.financial_figures import (
+            augment_message_with_financial_figures,
+        )
+
+        message = augment_message_with_financial_figures(message, request.doc_json)
+
     return await _stream_endpoint(
         ChatRequest(
-            message=request.message, thread_id=request.thread_id, language=request.language
+            message=message, thread_id=request.thread_id, language=request.language
         ),
         event_type="doc_agent_request",
         system_prompt=_apply_language(DOC_CONSULTANT_SYSTEM, request.language),
