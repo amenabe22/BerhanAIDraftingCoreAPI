@@ -23,37 +23,87 @@ def output_language_instruction(document_language: str | None) -> str:
 
 def locate_system_prompt() -> str:
     return """You are a document block selector for a legal document editor.
-Given a natural-language edit instruction and ranked candidate blocks, choose which block(s) to modify.
+Given a natural-language edit instruction, a document skeleton (outline + length features),
+and ranked candidate blocks, choose which block(s) to modify AND classify how the edit is scoped.
 
 IMPORTANT: End users NEVER reference internal block_ids (e.g. "b2", "b31"). They describe
-what they want in plain language — by clause content, section title, position, or intent.
-Your job is to map that natural-language request to the correct block_id(s) from the candidates.
+what they want in plain language — by clause content, section title, position, quality
+("too short", "thin", "most sections"), or intent in ANY language. Map that to block_id(s).
 
 Respond with JSON only:
 {
+  "spatial_scope": "pinpoint|section|multi_section|document_wide",
+  "selection_mode": "semantic|explicit_section|structural|hybrid",
+  "structural_intent": "short free-text description of how to choose blocks when not a single clause",
+  "thinness": "below_median|bottom_quartile|all_body",
+  "edit_intent": "expand|shorten|rewrite|replace|other",
   "targets": [
-    {"block_id": "...", "action": "replace|insert|remove|rewrite", "confidence": 0.0-1.0, "reason": "..."}
+    {"block_id": "...", "action": "replace|insert|remove|rewrite|expand", "confidence": 0.0-1.0, "reason": "..."}
   ],
   "scope": "single|multiple|section|global",
   "confidence": 0.0-1.0
 }
 
-Rules:
-- block_id MUST be copied exactly from the candidate list (internal IDs — never from the user instruction).
-- Match blocks by their text content, type (heading vs paragraph), and position relative to the request.
-- Use confidence >= 0.7 only when you are sure of the target.
-- For section-wide edits (shorten/simplify/rewrite an entire part like Definitions, Recitals, Termination):
-  set scope to "section" and target the section HEADING block_id (the pipeline expands to the full section body).
-- For global replace (change X to Y everywhere), set scope to "global" and list all matching blocks.
-- If no block matches the natural-language intent, return empty targets and confidence 0."""
+Dimensional rules (language-agnostic — reason from intent + skeleton features, not keywords):
+- spatial_scope=pinpoint + selection_mode=semantic: one clause/paragraph; list that block in targets.
+- spatial_scope=section + selection_mode=explicit_section: one named part; target the HEADING block_id
+  (pipeline expands to section body). Set scope=section.
+- spatial_scope=multi_section|document_wide OR selection_mode=structural|hybrid:
+  Prefer selecting body blocks that match structural_intent using skeleton features
+  (below_median / bottom_quartile / relative_thinness). Set thinness accordingly.
+  List ALL matching body block_ids from candidates/features in targets (or leave targets empty
+  if the pipeline should apply the structural filter — set confidence >= 0.6 and
+  selection_mode=structural). Set scope=multiple.
+- For find/replace of the same string everywhere: scope=global, spatial_scope=document_wide,
+  selection_mode=semantic, list matching blocks.
+- Use confidence >= 0.7 when sure; for broad structural edits, confidence 0.6–0.85 is fine
+  when thinness + outline clearly support the intent.
+- block_id MUST be copied exactly from candidates or body_features — never invented.
+- If the instruction is an edit but you cannot pick specific ids, still set spatial_scope /
+  selection_mode / thinness / edit_intent so the pipeline can resolve structurally.
+  Only use confidence 0 with empty plan fields when the message is not an edit at all."""
 
 
-def locate_user_prompt(instruction: str, candidates: list[dict[str, Any]]) -> str:
-    lines = [f"Instruction: {instruction}", "", "Candidate blocks (ranked):"]
+def locate_user_prompt(
+    instruction: str,
+    candidates: list[dict[str, Any]],
+    *,
+    skeleton: dict[str, Any] | None = None,
+) -> str:
+    lines = [f"Instruction: {instruction}", ""]
+    if skeleton:
+        stats = skeleton.get("stats") or {}
+        lines.append("Document skeleton stats:")
+        lines.append(
+            f"  blocks={stats.get('block_count')} headings={stats.get('heading_count')} "
+            f"body={stats.get('body_count')} median_body_chars={stats.get('median_body_chars')} "
+            f"q1_body_chars={stats.get('q1_body_chars')}"
+        )
+        lines.append("")
+        lines.append("Outline (headings):")
+        for h in (skeleton.get("outline") or [])[:40]:
+            lines.append(
+                f"  - block_id={h.get('block_id')} level={h.get('level')} title={h.get('title')}"
+            )
+        lines.append("")
+        lines.append("Body block features (for structural selection):")
+        for row in (skeleton.get("body_features") or [])[:60]:
+            lines.append(
+                f"  - block_id={row.get('block_id')} type={row.get('type')} "
+                f"chars={row.get('char_len')} words={row.get('word_count')} "
+                f"thinness={row.get('relative_thinness')} below_median={row.get('below_median')} "
+                f"q1={row.get('bottom_quartile')} parent={row.get('parent_heading_text')!r}\n"
+                f"    preview: {row.get('preview')}"
+            )
+        lines.append("")
+
+    lines.append("Candidate blocks (ranked for semantic match):")
     for i, block in enumerate(candidates, 1):
         lines.append(
             f"{i}. block_id={block.get('block_id')} type={block.get('type')} "
-            f"score={block.get('rerank_score', 'n/a')}\n   text: {(block.get('text') or '')[:400]}"
+            f"score={block.get('rerank_score', 'n/a')} "
+            f"chars={block.get('char_len', len((block.get('text') or '')))}\n"
+            f"   text: {(block.get('text') or '')[:400]}"
         )
     return "\n".join(lines)
 
@@ -83,10 +133,11 @@ CRITICAL RULES:
 3. For insert: payload must include new_text and position (before|after).
 4. For replace/rewrite: payload must include new_text with the FULL new block text.
 5. For expand/clarify/strengthen/"more detail": emit replace or expand with LONGER, complete legal prose in new_text — never empty operations and never reply with advice instead of ops.
-6. Only modify blocks required by the instruction — do not touch unrelated blocks.
-7. Do NOT invent block_ids. Do NOT modify blocks outside the target list unless scope is global.
-8. When shortening or simplifying legal text, preserve mandatory legal references (proclamation numbers, article citations, defined terms, and party obligations). Condense wording, do not remove substantive legal requirements.
-9. Return ONLY valid JSON, no markdown fences."""
+6. When multiple target blocks are listed (document-wide / multi-section expand or shorten), emit ONE operation per target body block that needs change. Do not collapse into a single op or reply with advice.
+7. Only modify blocks required by the instruction — do not touch unrelated blocks.
+8. Do NOT invent block_ids. Do NOT modify blocks outside the target list unless scope is global.
+9. When shortening or simplifying legal text, preserve mandatory legal references (proclamation numbers, article citations, defined terms, and party obligations). Condense wording, do not remove substantive legal requirements.
+10. Return ONLY valid JSON, no markdown fences."""
 
 
 def edit_user_prompt(

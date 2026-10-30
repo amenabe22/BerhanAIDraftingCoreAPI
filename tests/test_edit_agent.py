@@ -169,3 +169,138 @@ async def test_invalid_ops_safe_no_change(en_doc):
 
     assert result["no_effective_change"] is True
     assert len(extract_blocks_from_tiptap(result["document"])) == 3
+
+
+def _make_thin_sections_doc():
+    from tests.fixtures.tiptap_docs import make_block
+
+    long_payment = (
+        "The Client shall pay the Service Provider within thirty days of invoice "
+        "receipt, subject to withholding tax and bank transfer fees as agreed in "
+        "Schedule A of this Agreement, including late-payment interest at the "
+        "statutory rate and a cure period of ten business days."
+    )
+    return {
+        "type": "doc",
+        "content": [
+            make_block("h1", "1. PARTIES", block_type="heading", level=2),
+            make_block("p1", "Short parties clause."),
+            make_block("h2", "2. SCOPE", block_type="heading", level=2),
+            make_block("p2", "Short scope."),
+            make_block("h3", "3. PAYMENT", block_type="heading", level=2),
+            make_block("p3", long_payment),
+            make_block("h4", "4. TERM", block_type="heading", level=2),
+            make_block("p4", "Short term."),
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_document_wide_structural_expand_selects_thin_bodies():
+    """Broad quality instructions resolve via structural filter, not hard-fail."""
+    doc = _make_thin_sections_doc()
+    blocks = extract_blocks_from_tiptap(doc)
+    agent = SemanticEditAgent()
+
+    locate_plan = {
+        "spatial_scope": "document_wide",
+        "selection_mode": "structural",
+        "structural_intent": "body paragraphs that are relatively short / underdeveloped",
+        "thinness": "below_median",
+        "edit_intent": "expand",
+        "targets": [],
+        "scope": "multiple",
+        "confidence": 0.4,
+    }
+
+    async def fake_complete_json(system: str, user: str):
+        if "selector" in system.lower():
+            return locate_plan
+        if "verify" in system.lower():
+            return make_mock_verify_result(True)
+        # One expand op per thin body referenced in the edit user prompt
+        ops = []
+        for bid in ("p1", "p2", "p4"):
+            if bid in user:
+                ops.append(
+                    {
+                        "op_id": f"op{bid}",
+                        "type": "expand",
+                        "block_id": bid,
+                        "payload": {
+                            "new_text": f"Expanded detailed legal text for {bid} covering obligations and remedies."
+                        },
+                    }
+                )
+        return {"operations": ops}
+
+    with (
+        patch(
+            "app.services.drafting.editing.agent.rank_blocks_for_instruction",
+            return_value=blocks,
+        ),
+        patch(
+            "app.services.drafting.editing.agent.edit_llm.complete_json",
+            side_effect=fake_complete_json,
+        ),
+        patch(
+            "app.services.drafting.editing.agent.edit_llm.complete_text",
+            new=AsyncMock(return_value="Expanded short sections."),
+        ),
+    ):
+        result = await agent.edit_document(
+            doc,
+            instruction="expand the content on most of the sections it’s very light and short",
+            document_language="en",
+        )
+
+    assert result["no_effective_change"] is False
+    assert "Could not confidently locate" not in (result.get("no_effective_change_reason") or "")
+    assert result["metrics"]["stages"].get("structural_candidates", 0) >= 3
+    assert result["metrics"]["stages"].get("locate_recovery") in (None, "structural")
+    op_ids = {op["block_id"] for op in result["operations"]}
+    assert op_ids <= {"p1", "p2", "p4"}
+    assert "p3" not in op_ids
+    assert len(op_ids) >= 2
+
+
+@pytest.mark.asyncio
+async def test_pinpoint_locate_still_uses_semantic_single_target(en_doc):
+    """Regression: named-clause edits stay on the semantic top-K path."""
+    agent = SemanticEditAgent()
+    blocks = extract_blocks_from_tiptap(en_doc)
+
+    async def fake_complete_json(system: str, user: str):
+        if "selector" in system.lower():
+            return make_mock_locate_result("b2")
+        if "verify" in system.lower():
+            return make_mock_verify_result(True)
+        return make_mock_edit_ops("b2", "The Employee shall work thirty-five hours per week.")
+
+    with (
+        patch(
+            "app.services.drafting.editing.agent.rank_blocks_for_instruction",
+            return_value=blocks,
+        ),
+        patch(
+            "app.services.drafting.editing.agent.edit_llm.complete_json",
+            side_effect=fake_complete_json,
+        ),
+        patch(
+            "app.services.drafting.editing.agent.edit_llm.complete_text",
+            new=AsyncMock(return_value="Updated working hours."),
+        ),
+    ):
+        result = await agent.edit_document(
+            en_doc,
+            instruction="Change Article payment terms / working hours to thirty-five",
+            document_language="en",
+        )
+
+    assert result["no_effective_change"] is False
+    locate = result["metrics"]["stages"].get("locate") or {}
+    assert locate.get("selection_mode", "semantic") == "semantic"
+    assert locate.get("spatial_scope", "pinpoint") == "pinpoint"
+    assert "structural_candidates" not in result["metrics"]["stages"]
+    assert len(result["operations"]) == 1
+    assert result["operations"][0]["block_id"] == "b2"

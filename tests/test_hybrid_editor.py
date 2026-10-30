@@ -4,11 +4,71 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.drafting.editing.retrieval import expand_section_blocks
+from app.services.drafting.editing.retrieval import (
+    build_document_skeleton,
+    expand_section_blocks,
+    merge_candidate_blocks,
+    structural_candidate_blocks,
+)
 from app.services.drafting.editing.tools import (
     _apply_document_edit_impl,
     create_apply_document_edit_tool,
 )
+
+
+def _thin_thick_doc_blocks():
+    """Fixture-like blocks: several short bodies + one long body under headings."""
+    return [
+        {"block_id": "h1", "type": "heading", "attrs": {"level": 2}, "text": "1. PARTIES"},
+        {"block_id": "p1", "type": "paragraph", "attrs": {}, "text": "Short A."},
+        {"block_id": "h2", "type": "heading", "attrs": {"level": 2}, "text": "2. SCOPE"},
+        {"block_id": "p2", "type": "paragraph", "attrs": {}, "text": "Short B."},
+        {"block_id": "h3", "type": "heading", "attrs": {"level": 2}, "text": "3. PAYMENT"},
+        {
+            "block_id": "p3",
+            "type": "paragraph",
+            "attrs": {},
+            "text": (
+                "The Client shall pay the Service Provider within thirty days of invoice "
+                "receipt, subject to withholding tax and bank transfer fees as agreed in "
+                "Schedule A of this Agreement, including late-payment interest at the "
+                "statutory rate and a cure period of ten business days."
+            ),
+        },
+        {"block_id": "h4", "type": "heading", "attrs": {"level": 2}, "text": "4. TERM"},
+        {"block_id": "p4", "type": "paragraph", "attrs": {}, "text": "Short C."},
+    ]
+
+
+def test_build_document_skeleton_features():
+    blocks = _thin_thick_doc_blocks()
+    skeleton = build_document_skeleton(blocks)
+    assert skeleton["stats"]["heading_count"] == 4
+    assert skeleton["stats"]["body_count"] == 4
+    assert skeleton["stats"]["median_body_chars"] > 0
+    by_id = {r["block_id"]: r for r in skeleton["body_features"]}
+    assert by_id["p1"]["below_median"] is True
+    assert by_id["p2"]["below_median"] is True
+    assert by_id["p4"]["below_median"] is True
+    assert by_id["p3"]["below_median"] is False
+    assert by_id["p1"]["parent_heading_id"] == "h1"
+
+
+def test_structural_candidate_blocks_below_median():
+    blocks = _thin_thick_doc_blocks()
+    selected = structural_candidate_blocks(blocks, thinness="below_median")
+    ids = {b["block_id"] for b in selected}
+    assert ids == {"p1", "p2", "p4"}
+    assert "p3" not in ids
+    assert "h1" not in ids
+
+
+def test_merge_candidate_blocks_dedupes():
+    a = [{"block_id": "p1", "text": "a"}, {"block_id": "p2", "text": "b"}]
+    b = [{"block_id": "p2", "text": "b2"}, {"block_id": "p3", "text": "c"}]
+    merged = merge_candidate_blocks(a, b)
+    assert [x["block_id"] for x in merged] == ["p1", "p2", "p3"]
+    assert merged[1]["text"] == "b"
 
 
 def test_expand_section_blocks_includes_body_until_next_heading():

@@ -185,3 +185,168 @@ def expand_section_blocks(
                 expanded.add(nxt_id)
 
     return expanded
+
+
+_BODY_TYPES = frozenset({"paragraph", "bulletList", "orderedList", "listItem", "blockquote"})
+
+
+def _word_count(text: str) -> int:
+    return len([t for t in (text or "").split() if t])
+
+
+def _attach_section_parents(all_blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Annotate each block with parent_heading_id / parent_heading_text (document order)."""
+    current_heading_id: str | None = None
+    current_heading_text: str = ""
+    enriched: list[dict[str, Any]] = []
+    for block in all_blocks:
+        b = dict(block)
+        if b.get("type") == "heading":
+            current_heading_id = b.get("block_id")
+            current_heading_text = (b.get("text") or "").strip()
+            b["parent_heading_id"] = None
+            b["parent_heading_text"] = ""
+            b["is_section_heading"] = True
+        else:
+            b["parent_heading_id"] = current_heading_id
+            b["parent_heading_text"] = current_heading_text
+            b["is_section_heading"] = False
+        text = (b.get("text") or "").strip()
+        b["char_len"] = len(text)
+        b["word_count"] = _word_count(text)
+        enriched.append(b)
+    return enriched
+
+
+def build_document_skeleton(all_blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build outline + per-block length features for dimensional locate.
+
+    Features are relative (median / quartile), not language-specific keywords.
+    """
+    enriched = _attach_section_parents(all_blocks)
+    body = [
+        b
+        for b in enriched
+        if b.get("type") != "heading" and (b.get("type") in _BODY_TYPES or b.get("char_len", 0) > 0)
+    ]
+    lengths = sorted(b["char_len"] for b in body if b["char_len"] > 0)
+    median = lengths[len(lengths) // 2] if lengths else 0
+    q1 = lengths[max(0, len(lengths) // 4)] if lengths else 0
+
+    for b in enriched:
+        cl = b.get("char_len") or 0
+        if median > 0 and b.get("type") != "heading":
+            b["relative_thinness"] = round(cl / median, 3)
+            b["below_median"] = cl <= median
+            b["bottom_quartile"] = cl <= q1 if q1 > 0 else cl <= median
+        else:
+            b["relative_thinness"] = 1.0 if b.get("type") == "heading" else 0.0
+            b["below_median"] = False
+            b["bottom_quartile"] = False
+
+    outline = [
+        {
+            "block_id": b["block_id"],
+            "level": _heading_level(b),
+            "title": (b.get("text") or "")[:120],
+        }
+        for b in enriched
+        if b.get("type") == "heading"
+    ]
+
+    feature_rows = [
+        {
+            "block_id": b["block_id"],
+            "type": b.get("type"),
+            "char_len": b["char_len"],
+            "word_count": b["word_count"],
+            "parent_heading_id": b.get("parent_heading_id"),
+            "parent_heading_text": (b.get("parent_heading_text") or "")[:80],
+            "relative_thinness": b.get("relative_thinness"),
+            "below_median": b.get("below_median"),
+            "bottom_quartile": b.get("bottom_quartile"),
+            "preview": (b.get("text") or "")[:160],
+        }
+        for b in enriched
+        if b.get("type") != "heading"
+    ]
+
+    return {
+        "outline": outline,
+        "stats": {
+            "block_count": len(enriched),
+            "heading_count": len(outline),
+            "body_count": len(body),
+            "median_body_chars": median,
+            "q1_body_chars": q1,
+        },
+        "body_features": feature_rows,
+        "enriched_blocks": enriched,
+    }
+
+
+def structural_candidate_blocks(
+    all_blocks: list[dict[str, Any]],
+    *,
+    thinness: str = "below_median",
+    max_targets: int | None = None,
+) -> list[dict[str, Any]]:
+    """Select body blocks by relative length features (language-agnostic).
+
+    ``thinness``:
+      - ``below_median``: body blocks at or below median char length
+      - ``bottom_quartile``: body blocks at or below Q1
+      - ``all_body``: all non-heading body blocks under a section heading
+    """
+    skeleton = build_document_skeleton(all_blocks)
+    enriched = skeleton["enriched_blocks"]
+    limit = max_targets if max_targets is not None else getattr(
+        settings, "EDIT_STRUCTURAL_MAX_TARGETS", 24
+    )
+
+    mode = (thinness or "below_median").strip().lower()
+    selected: list[dict[str, Any]] = []
+    for b in enriched:
+        if b.get("type") == "heading":
+            continue
+        if not (b.get("char_len") or 0):
+            continue
+        # Prefer content under a heading (skip orphan preamble stubs when outline exists)
+        if skeleton["outline"] and not b.get("parent_heading_id"):
+            continue
+        if mode == "all_body":
+            selected.append(b)
+        elif mode == "bottom_quartile":
+            if b.get("bottom_quartile"):
+                selected.append(b)
+        else:  # below_median default
+            if b.get("below_median"):
+                selected.append(b)
+
+    if not selected and mode != "all_body":
+        # Soften: if nothing is "thin" relative to median (uniform short doc), take all bodies
+        selected = [
+            b
+            for b in enriched
+            if b.get("type") != "heading"
+            and (b.get("char_len") or 0) > 0
+            and (not skeleton["outline"] or b.get("parent_heading_id"))
+        ]
+
+    return selected[:limit] if limit else selected
+
+
+def merge_candidate_blocks(
+    *groups: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Stable union of candidate lists by block_id (first occurrence wins)."""
+    seen: set[str] = set()
+    merged: list[dict[str, Any]] = []
+    for group in groups:
+        for b in group:
+            bid = b.get("block_id")
+            if not bid or bid in seen:
+                continue
+            seen.add(bid)
+            merged.append(b)
+    return merged

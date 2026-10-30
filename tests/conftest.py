@@ -221,6 +221,11 @@ def multi_page_doc():
 
 def make_mock_locate_result(block_id: str, action: str = "replace", confidence: float = 0.9):
     return {
+        "spatial_scope": "pinpoint",
+        "selection_mode": "semantic",
+        "structural_intent": "",
+        "thinness": "below_median",
+        "edit_intent": "replace",
         "targets": [{"block_id": block_id, "action": action, "confidence": confidence, "reason": "test"}],
         "scope": "single",
         "confidence": confidence,

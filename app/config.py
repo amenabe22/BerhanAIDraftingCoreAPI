@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     EDIT_MAX_REVISIONS: int = 2
     # Soft cap on blocks included in section-expand edit context (0 = unlimited)
     EDIT_SECTION_MAX_BLOCKS: int = 40
+    # Cap for structural / document-wide locate targets
+    EDIT_STRUCTURAL_MAX_TARGETS: int = 24
+    # Broader candidate pool on locate retry
+    EDIT_SELECTOR_RETRY_TOP_K: int = 20
 
     # Redis (compliance result cache + diff anchoring)
     REDIS_URL: str = "redis://localhost:6379/0"
