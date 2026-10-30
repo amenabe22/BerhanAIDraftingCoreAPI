@@ -208,15 +208,21 @@ You have five tools:
 Decide for yourself whether to answer or call apply_document_edit — based on user intent and conversation context. There is no keyword checklist.
 Prefer acting over asking. If something is only mildly ambiguous, make a reasonable assumption, briefly state it, and proceed.
 Never ask "which sections?" for broad expand/shorten of short/light content — call apply_document_edit once with that intent so the editor can select underdeveloped body sections from the document structure.
-For document-wide money changes (e.g. "lower financial figures by 50%", "reduce payments by half"): ALWAYS call list_document_financial_figures first. NEVER claim "no amounts found" unless that tool returned none. Then either apply_document_edit (if the target is clear, e.g. all cash amounts / a named figure), or ask_clarifying_questions with options built from the tool results.
+For money/amount changes (e.g. "lower financial figures by 50%", "reduce payments by half"):
+- If the message already includes AUTHORITATIVE / COMPUTED TARGET figures, trust them — do not re-ask whether amounts exist.
+- When a percent/half is known AND the target figure is clear (only one cash amount, user said "all", or user just selected which figure), call apply_document_edit IMMEDIATELY with the computed new amount (e.g. 500,000 ETB → 250,000 ETB). State the assumption briefly after editing.
+- NEVER ask the user to type the new birr/ETB number when the percent (or COMPUTED TARGET) is already known — that is not clarification, it is busywork.
+- Only ask_clarifying_questions which currency figure(s) to change when multiple distinct cash amounts exist and the user did not say which/all. Do not offer profit-share ratios (50/50) as "amounts to reduce by 50%" unless the user explicitly asked to change sharing ratios.
+- Prefer acting over asking whenever you are reasonably sure.
 
 When you DO need clarification (conflicting goals, which money/clause to change, or which of several edit strategies):
-- For money/amounts: call list_document_financial_figures (required). Optionally also search_user_documents for clause context.
+- For money/amounts: use AUTHORITATIVE figures in the message / list_document_financial_figures. Optionally also search_user_documents for clause context.
 - For other ambiguity: call search_user_documents first.
 - Then call ask_clarifying_questions — NEVER ask as plain chat prose when choices are natural.
 - Prefer kind=single_choice with 2–5 short options. Set allow_other=true.
-- Options MUST be document-specific: use real heading/clause labels and the actual figure from list_document_financial_figures (e.g. "አጋር 1 contribution — 500,000 ETB", "Profit & loss sharing — 50/50", "All listed cash amounts"). Do NOT invent "no figures found" or use generic labels like "Fees only" unless those appear in the document.
-- Use kind=text only for open values (names, amounts, dates) the document does not already define.
+- Options MUST be document-specific: use real heading/clause labels and the actual figure (e.g. "Capital contribution — 500,000 ETB", "All listed cash amounts"). Do NOT invent "no figures found" or use generic labels like "Fees only" unless those appear in the document.
+- Use kind=text ONLY for open values the document and prior instruction do NOT already define. Never use kind=text to ask for a new amount that can be computed from a stated percent/half.
+- After the user answers which figure: apply_document_edit in the SAME turn with the computed replacement — do not ask another question.
 - Keep response_message to 1–2 friendly sentences. Do not also list the same questions as chat bullets.
 
 EDIT vs Q&A (critical):
@@ -738,7 +744,7 @@ def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
 
 # Cache of compiled doc graphs keyed by (doc_id, enable_edit, toolset_version).
 # Bump toolset_version when binding new tools so long-lived processes rebuild.
-_DOC_TOOLSET_VERSION = "financial_v1"
+_DOC_TOOLSET_VERSION = "financial_v2"
 _doc_graphs: dict[tuple[str, bool, str], object] = {}
 
 

@@ -51,6 +51,21 @@ def test_format_reports_none_when_empty():
     assert "No monetary amounts" in text
 
 
+def test_format_includes_computed_half_target():
+    hits = [
+        {
+            "block_id": "b1",
+            "amount": "500,000 ETB",
+            "section": "አስተዋጽኦ",
+            "snippet": "ገንዘብ: 500,000 ETB",
+        }
+    ]
+    text = format_financial_figures_for_tool(hits, factor=0.5)
+    assert "250,000 ETB" in text
+    assert "COMPUTED TARGET" in text
+    assert "apply_document_edit NOW" in text
+
+
 def test_skips_tiny_bare_integers():
     doc = {
         "type": "doc",

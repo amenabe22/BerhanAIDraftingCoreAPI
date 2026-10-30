@@ -95,7 +95,50 @@ def extract_financial_figures(
     return hits
 
 
-def format_financial_figures_for_tool(hits: list[dict[str, Any]]) -> str:
+_CURRENCY_AMOUNT_RE = re.compile(
+    r"^(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?P<cur>ETB|ብር|Birr|birr)?$",
+    re.UNICODE,
+)
+
+_PERCENT_FACTOR_RE = re.compile(
+    r"(?:(?:lower|reduce|cut|decrease|መቀነስ|ቀንስ|አሳንስ).{0,40}?(?:to\s+)?(?:like\s+)?"
+    r"(?P<pct>\d+(?:\.\d+)?)\s*%"
+    r"|(?P<pct2>\d+(?:\.\d+)?)\s*%.{0,40}?(?:lower|reduce|cut|decrease|መቀነስ)"
+    r"|(?:by\s+)?(?:a\s+)?half|ግማሽ|halve)",
+    re.IGNORECASE,
+)
+
+
+def parse_percent_factor(text: str) -> float | None:
+    raw = text or ""
+    if re.search(r"\bhalf\b|halve|ግማሽ", raw, re.IGNORECASE):
+        return 0.5
+    m = _PERCENT_FACTOR_RE.search(raw)
+    if not m:
+        return None
+    pct_s = m.groupdict().get("pct") or m.groupdict().get("pct2")
+    if not pct_s:
+        return 0.5
+    try:
+        pct = float(pct_s)
+    except ValueError:
+        return None
+    if pct <= 0 or pct > 100:
+        return None
+    return pct / 100.0
+
+
+def _format_number(value: float) -> str:
+    if abs(value - round(value)) < 1e-9:
+        return f"{int(round(value)):,}"
+    return f"{value:,.2f}"
+
+
+def format_financial_figures_for_tool(
+    hits: list[dict[str, Any]],
+    *,
+    factor: float | None = None,
+) -> str:
     if not hits:
         return (
             "No monetary amounts, currency figures, percentages, or ratios "
@@ -112,6 +155,41 @@ def format_financial_figures_for_tool(hits: list[dict[str, Any]]) -> str:
             f"{i}. amount={h.get('amount')!r} section={section!r} "
             f"block_id={h.get('block_id')} snippet={h.get('snippet')!r}"
         )
+    if factor is not None:
+        pct = int(round(factor * 100))
+        lines.append("")
+        lines.append(
+            f"COMPUTED TARGET (factor={factor} ≈ {pct}% of current currency amounts). "
+            "Do NOT ask the user to type a new birr/ETB amount."
+        )
+        proposals = 0
+        for h in hits:
+            m = _CURRENCY_AMOUNT_RE.match(str(h.get("amount") or "").strip())
+            if not m:
+                continue
+            try:
+                value = float(m.group("num").replace(",", ""))
+            except ValueError:
+                continue
+            cur = (m.group("cur") or "ETB").upper()
+            if cur in ("BIRR", "ብር"):
+                cur = "ETB"
+            proposed = f"{_format_number(value * factor)} {cur}"
+            lines.append(
+                f"- Replace {h.get('amount')!r} → {proposed!r} "
+                f"(section={h.get('section')!r})"
+            )
+            proposals += 1
+        if proposals == 1:
+            lines.append(
+                "ACTION: apply_document_edit NOW with that replacement. "
+                "Do not ask_clarifying_questions for the new amount."
+            )
+        elif proposals > 1:
+            lines.append(
+                "ACTION: If the target figure is known, apply_document_edit immediately. "
+                "Only ask which currency amount(s) — never ask for the new number."
+            )
     return "\n".join(lines)
 
 
@@ -138,12 +216,11 @@ def augment_message_with_financial_figures(
     if not text or not looks_like_financial_edit(text):
         return message
     # Already augmented by CoreAPI hybrid path
-    if "AUTHORITATIVE live document financial figures" in text or (
-        "Found " in text and "financial figure" in text
-    ):
+    if "AUTHORITATIVE live document financial figures" in text or "COMPUTED TARGET" in text:
         return message
     hits = extract_financial_figures(doc_json)
-    body = format_financial_figures_for_tool(hits)
+    factor = parse_percent_factor(text)
+    body = format_financial_figures_for_tool(hits, factor=factor)
     return (
         f"{text}\n\n---\nAUTHORITATIVE live document financial figures "
         f"(do not claim none exist):\n{body}\n---"

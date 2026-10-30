@@ -239,14 +239,13 @@ def create_ask_clarifying_questions_tool() -> StructuredTool:
         func=_ask_clarifying_questions_impl,
         name="ask_clarifying_questions",
         description=(
-            "Ask the user 1-3 clarifying questions with selectable options when you "
-            "need a choice before editing or answering. For money/amount requests, "
-            "ALWAYS call list_document_financial_figures first and build options from "
-            "those hits (section + amount). Prefer 2-5 short document-specific options "
-            "and allow_other true. Avoid generic labels like 'fees only' unless that "
-            "wording is in the document. Use text kind only for open answers (names, "
-            "new amounts). Do NOT ask as plain prose when options are natural. Do not "
-            "call when the edit target is already clear."
+            "Ask the user 1-3 clarifying questions with selectable options when a real "
+            "choice is required before editing. For money/amount requests: only ask "
+            "WHICH figure(s) when multiple cash amounts are ambiguous — never ask them "
+            "to type a new ETB/birr value when a percent/half (or COMPUTED TARGET) is "
+            "already known; apply the edit instead. Prefer 2-5 document-specific "
+            "single_choice options with allow_other true. Do not call when the edit "
+            "target and new value are already clear."
         ),
         args_schema=AskClarifyingQuestionsInput,
     )
