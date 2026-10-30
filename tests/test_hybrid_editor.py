@@ -13,7 +13,9 @@ from app.services.drafting.editing.retrieval import (
 )
 from app.services.drafting.editing.tools import (
     _apply_document_edit_impl,
+    _ask_clarifying_questions_impl,
     create_apply_document_edit_tool,
+    create_ask_clarifying_questions_tool,
 )
 
 
@@ -113,6 +115,46 @@ def test_expand_section_blocks_keeps_non_heading_seeds():
 def test_create_apply_document_edit_tool_name():
     tool = create_apply_document_edit_tool()
     assert tool.name == "apply_document_edit"
+
+
+def test_create_ask_clarifying_questions_tool_name():
+    tool = create_ask_clarifying_questions_tool()
+    assert tool.name == "ask_clarifying_questions"
+
+
+def test_ask_clarifying_questions_emits_choice_form(monkeypatch):
+    import json
+
+    emitted: list[dict] = []
+
+    def _capture(event):
+        emitted.append(event)
+
+    monkeypatch.setattr(
+        "app.services.drafting.editing.tools._emit_custom",
+        _capture,
+    )
+    raw = _ask_clarifying_questions_impl(
+        response_message="Which edit should I apply?",
+        questions=[
+            {
+                "id": "q1",
+                "prompt": "What should we do with short sections?",
+                "kind": "single_choice",
+                "options": [
+                    {"id": "expand", "label": "Expand them"},
+                    {"id": "shorten", "label": "Leave them short"},
+                ],
+                "allow_other": True,
+            }
+        ],
+    )
+    data = json.loads(raw)
+    assert data["ok"] is True
+    assert data["awaiting_user"] is True
+    assert emitted and emitted[0]["type"] == "clarification_needed"
+    assert emitted[0]["questions"][0]["kind"] == "single_choice"
+    assert len(emitted[0]["questions"][0]["options"]) >= 2
 
 
 def test_apply_document_edit_impl_without_doc_json():
