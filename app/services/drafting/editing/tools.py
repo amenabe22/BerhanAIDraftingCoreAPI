@@ -28,20 +28,30 @@ class ApplyDocumentEditInput(BaseModel):
 
 
 class ClarificationOptionInput(BaseModel):
-    id: str = Field(description="Stable option id, e.g. shorter")
-    label: str = Field(description="Short user-visible label")
+    id: str = Field(description="Stable option id, e.g. capital_contributions")
+    label: str = Field(
+        description=(
+            "Short user-visible label grounded in THIS document "
+            "(section/clause name and amount when known), not a generic category"
+        )
+    )
 
 
 class ClarificationQuestionInput(BaseModel):
     id: str = Field(description="Stable question id, e.g. q1")
-    prompt: str = Field(description="Short question shown to the user")
+    prompt: str = Field(
+        description="Short question shown to the user, tied to what was found in the document"
+    )
     kind: str = Field(
         default="single_choice",
         description="single_choice (radio) or text (free-form)",
     )
     options: list[ClarificationOptionInput] = Field(
         default_factory=list,
-        description="2-5 options when kind is single_choice",
+        description=(
+            "2-5 options when kind is single_choice — each must name a real "
+            "document clause/amount (e.g. contributions, profit share), not generic buckets"
+        ),
     )
     allow_other: bool = Field(
         default=True,
@@ -230,11 +240,14 @@ def create_ask_clarifying_questions_tool() -> StructuredTool:
         name="ask_clarifying_questions",
         description=(
             "Ask the user 1-3 clarifying questions with selectable options when you "
-            "need a choice before editing or answering. Prefer single_choice with "
-            "2-5 short options and allow_other true. Use text kind only for open "
-            "answers (names, amounts). Do NOT ask clarifying questions as plain "
-            "prose in your reply when options are natural — call this tool instead. "
-            "Do not call this when the user already asked to apply a clear edit."
+            "need a choice before editing or answering. ALWAYS search the document "
+            "first, then build single_choice options from real clauses/amounts found "
+            "(section titles + figures, e.g. contributions, profit share, penalties). "
+            "Prefer 2-5 short document-specific options and allow_other true. Avoid "
+            "generic labels like 'fees only' unless that wording is in the document. "
+            "Use text kind only for open answers (names, new amounts). Do NOT ask as "
+            "plain prose when options are natural. Do not call when the edit target "
+            "is already clear."
         ),
         args_schema=AskClarifyingQuestionsInput,
     )
