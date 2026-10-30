@@ -62,17 +62,19 @@ class AskClarifyingQuestionsInput(BaseModel):
 
 
 def _run_async(coro):
-    """Run an async coroutine from a sync tool context."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
+    """Run an async coroutine from a sync ToolNode safely.
 
-    # Already inside an event loop (unlikely for ToolNode sync path) — run in a thread.
+    Doc-agent graphs stream via ``asyncio.to_thread``; tools therefore run on a
+    worker thread that must not nest ``asyncio.run`` against a polluted/closed
+    loop. Always isolate the edit agent in a fresh thread + ``asyncio.run``.
+    """
     import concurrent.futures
 
+    def _runner():
+        return asyncio.run(coro)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
+        return pool.submit(_runner).result()
 
 
 def _emit_custom(event: dict[str, Any]) -> None:

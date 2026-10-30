@@ -306,7 +306,7 @@ class SemanticEditAgent:
             )
 
         except Exception as exc:
-            logger.exception("Semantic edit failed op=%s", operation_id)
+            logger.exception("Semantic edit failed op=%s err=%s", operation_id, exc)
             return self._error_result(doc_json, operation_id, metrics, started, str(exc))
 
     async def _locate_targets(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -46,14 +47,25 @@ def _extract_json(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _invoke_sync(llm: ChatOpenAI, system: str, user: str) -> str:
+    """Sync OpenAI invoke — avoids httpx AsyncClient binding to a closed loop.
+
+    ``apply_document_edit`` runs inside LangGraph's sync ToolNode (often in a
+    worker thread via ``asyncio.to_thread``). Nesting ``ainvoke`` + ``asyncio.run``
+    there commonly raises ``RuntimeError: Event loop is closed`` on the 2nd+ edit
+    in the same process.
+    """
+    response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+    return response.content if isinstance(response.content, str) else str(response.content)
+
+
 async def complete_json(system: str, user: str) -> dict[str, Any] | None:
     llm = _llm(json_mode=True)
-    response = await llm.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
-    content = response.content if isinstance(response.content, str) else str(response.content)
+    # Run sync invoke off the current loop so we never reuse a closed async client.
+    content = await asyncio.to_thread(_invoke_sync, llm, system, user)
     return _extract_json(content)
 
 
 async def complete_text(system: str, user: str) -> str:
     llm = _llm(json_mode=False)
-    response = await llm.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
-    return response.content if isinstance(response.content, str) else str(response.content)
+    return await asyncio.to_thread(_invoke_sync, llm, system, user)
