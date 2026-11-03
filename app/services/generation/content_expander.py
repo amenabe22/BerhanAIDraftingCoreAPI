@@ -151,15 +151,16 @@ class ContentExpander:
         language = normalize_language_code(requirements.get("language", "en"))
         if language == "am":
             structure_example = self.prompt_builder.DOCUMENT_STRUCTURE_EXAMPLE_AMHARIC
-            language_instruction = """
-CRITICAL LANGUAGE REQUIREMENT:
+            language_instruction = f"""
+CRITICAL LANGUAGE REQUIREMENT (AMHARIC MODE):
 - You MUST expand the document in Amharic (አማርኛ)
 - All new text, titles, content, clauses MUST be in Amharic
 - Use Amharic characters and proper Amharic formatting
 - Preserve the existing Amharic content
 - The metadata language field MUST remain "am"
-- IMPORTANT: Preserve user-provided information (names, addresses, dates, etc.) exactly as they appear
+- IMPORTANT: Preserve user-provided information (names, addresses) exactly as they appear
 - Do NOT translate user-provided names, addresses, or specific information - keep them as-is
+{self.prompt_builder.AMHARIC_DATE_AND_STYLE}
 """
         elif language == "om":
             structure_example = self.prompt_builder.DOCUMENT_STRUCTURE_EXAMPLE_ENGLISH
@@ -175,20 +176,21 @@ CRITICAL LANGUAGE REQUIREMENT:
         else:
             structure_example = self.prompt_builder.DOCUMENT_STRUCTURE_EXAMPLE_ENGLISH
             language_instruction = """
-CRITICAL LANGUAGE REQUIREMENT:
+CRITICAL LANGUAGE REQUIREMENT (ENGLISH MODE):
 - You MUST expand the document in English
 - All new text, titles, content, clauses MUST be in English
 - Preserve the existing English content
 - The metadata language field MUST remain "en"
+- Use Gregorian calendar dates unless the user specified otherwise
 - IMPORTANT: Preserve user-provided information (names, addresses, dates, etc.) exactly as they appear
 - Keep all user-provided information in its original language
 """
         
-        # Get user-specified page count or use default
+        # Explicit num_pages is an exact hard target (no +1 buffer)
         target_pages = requirements.get("num_pages")
         if target_pages and isinstance(target_pages, int) and 1 <= target_pages <= 20:
             min_pages = target_pages
-            max_pages = min(target_pages + 1, settings.MAX_PAGES)  # Allow 1 page buffer, but cap at max
+            max_pages = target_pages
         else:
             min_pages = settings.MIN_PAGES
             max_pages = settings.MAX_PAGES

@@ -1,12 +1,13 @@
 import asyncio
 import json
 import uuid
+from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
 
@@ -14,6 +15,8 @@ from app.api.v1.endpoints.drafting.compliance import router as compliance_router
 from app.api.v1.endpoints.drafting.edit import router as edit_router
 from app.api.v1.endpoints.drafting.export import router as export_router
 from app.api.v1.endpoints.drafting.generate import router as generate_router
+from app.auth import ServiceAuthMiddleware
+from app.config import settings
 from app.graph import (
     DOC_CONSULTANT_SYSTEM,
     LEGAL_ADVISOR_SYSTEM,
@@ -23,9 +26,28 @@ from app.graph import (
 )
 from app.llm import SupportedModel, resolve_model
 from app.logging_config import get_logger, setup_logging
+from app.services.chat_attachments import resolve_human_message_content
 
 setup_logging()
 log = get_logger("chat")
+
+_IS_PROD = (getattr(settings, "ENVIRONMENT", "") or "").lower() in {
+    "production",
+    "prod",
+}
+
+_TEST_CLIENT_PATH = Path(__file__).resolve().parent.parent / "test_client.html"
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    if _IS_PROD and not (getattr(settings, "BERHAN_SEARCH_API_KEY", None) or "").strip():
+        raise RuntimeError("BERHAN_SEARCH_API_KEY is required in production")
+    yield
+
+
+def _service_unavailable_http() -> HTTPException:
+    return HTTPException(status_code=503, detail="Service temporarily unavailable")
 
 
 class Language(str, Enum):
@@ -35,17 +57,44 @@ class Language(str, Enum):
 
 
 _LANG_INSTRUCTION: dict[Language, str] = {
-    Language.amharic: "Always respond in Amharic (አማርኛ).",
-    Language.english: "Always respond in English.",
-    Language.oromo: "Always respond in Oromo (Afaan Oromoo).",
+    Language.amharic: (
+        "Respond entirely in Amharic (አማርኛ). "
+        "The full answer — explanations, step lists, caveats, refusals (if any), and gap notices — "
+        "must be Amharic. Do NOT switch to English for disclaimers, tax caveats, or "
+        "\"I cannot…\" / \"consult an advisor\" lines. English is only allowed for proper nouns, "
+        "statute titles, and article numbers when needed."
+    ),
+    Language.english: (
+        "Respond entirely in English. Do not switch to Amharic or Oromo mid-reply."
+    ),
+    Language.oromo: (
+        "Respond entirely in Afaan Oromo. "
+        "The full answer — explanations, steps, caveats, refusals (if any), and gap notices — "
+        "must be Afaan Oromo. Do NOT switch to English for disclaimers or brush-off lines."
+    ),
 }
 
 _LANG_DEFAULT_INSTRUCTION = (
-    "Detect the language of the user's message and always respond in that same language."
+    "Detect the language of the user's latest message and respond in that same language for the "
+    "ENTIRE reply (including caveats and any soft refusal). "
+    "If the user wrote in Amharic (Ethiopic script), answer in Amharic only — never English prose. "
+    "If they wrote in Afaan Oromo, answer in Afaan Oromo only."
+)
+
+_LANG_DOC_SCOPE_NOTE = (
+    "LANGUAGE above controls your *chat replies* only. "
+    "Never translate, rewrite, or change the open document's wording or governing-language "
+    "clause just because the UI/chat language differs from the document. "
+    "Only mutate the document when the user clearly asks for a text change."
 )
 
 
-def _apply_language(system_prompt: str, language: Language | None) -> str:
+def _apply_language(
+    system_prompt: str,
+    language: Language | None,
+    *,
+    document_scope: bool = False,
+) -> str:
     instruction = (
         _LANG_INSTRUCTION.get(language, _LANG_DEFAULT_INSTRUCTION)
         if language
@@ -53,15 +102,18 @@ def _apply_language(system_prompt: str, language: Language | None) -> str:
     )
     # Language instruction goes at the TOP so the LLM sees it first,
     # without disrupting the tool-call directives that follow.
-    return f"LANGUAGE: {instruction}\n\n{system_prompt}"
+    prefix = f"LANGUAGE: {instruction}"
+    if document_scope:
+        prefix = f"{prefix}\n{_LANG_DOC_SCOPE_NOTE}"
+    return f"{prefix}\n\n{system_prompt}"
 
 
 class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
     language: Language | None = None
-    # Optional URL of any file/image supported by Gemini multimodal (JPEG, PNG,
-    # GIF, WEBP, PDF, MP4, MP3, WAV, …). Null / omitted → text-only message.
+    # Optional attachment URL. Images (JPEG/PNG/GIF/WEBP) are sent multimodal;
+    # DOCX is text-extracted; PDF is sent as a MIME data URL. Null → text-only.
     file_url: str | None = None
     # Model selection — must be one of the supported OpenRouter model IDs.
     # Omit to use the server default (GEMINI_MODEL env var).
@@ -80,48 +132,60 @@ class DocChatRequest(BaseModel):
     document_language: str | None = None
 
 
-app = FastAPI(title="Berhan Advisor Knowledge Agent")
+app = FastAPI(
+    title="Berhan Advisor Knowledge Agent",
+    docs_url=None if _IS_PROD else "/docs",
+    redoc_url=None if _IS_PROD else "/redoc",
+    openapi_url=None if _IS_PROD else "/openapi.json",
+    lifespan=_lifespan,
+)
+
+_cors_origins = ["https://docs.berhan.ai", "https://berhan.ai", "https://www.berhan.ai"]
+if not _IS_PROD:
+    _cors_origins.extend(["http://localhost:3000", "http://127.0.0.1:3000"])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://docs.berhan.ai",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "Accept", "Origin"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Origin",
+        "X-Berhan-Service-Key",
+    ],
     max_age=86400,
 )
+app.add_middleware(ServiceAuthMiddleware)
 
 app.include_router(compliance_router, prefix="/drafting")
 app.include_router(edit_router, prefix="/drafting")
 app.include_router(generate_router, prefix="/drafting")
 app.include_router(export_router, prefix="/drafting")
 
-_TEST_CLIENT_PATH = Path(__file__).resolve().parent.parent / "test_client.html"
-
 
 @app.get("/")
 async def root():
-    if _TEST_CLIENT_PATH.exists():
-        return FileResponse(_TEST_CLIENT_PATH)
+    if not _IS_PROD and _TEST_CLIENT_PATH.is_file():
+        return HTMLResponse(_TEST_CLIENT_PATH.read_text(encoding="utf-8"))
     return {
-        "message": "Berhan Advisor API",
-        "docs": "/docs",
-        "health": "/health",
-        "legal_search_stream": "/legal-search/stream",
-        "legal_agent_stream": "/legal-agent/stream",
-        "doc_agent_stream": "/doc-agent/stream",
-        "compliance_analyze": "/drafting/compliance/analyze",
-        "compliance_analyze_stream": "/drafting/compliance/analyze-stream",
-        "semantic_edit": "/drafting/edit",
+        "status": "ok",
+        "service": "berhan-search-api",
+        "legal_search_stream": "POST /legal-search/stream",
+        "legal_agent_stream": "POST /legal-agent/stream",
+        "compliance_analyze_stream": "POST /drafting/compliance/analyze/stream",
     }
 
 
 @app.get("/health")
 async def health():
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
     return {"status": "ok"}
 
 
@@ -195,22 +259,10 @@ def _is_new_thread(graph, thread_id: str) -> bool:
         return True
 
 
-def _human_message_content(message: str, file_url: str | None) -> str | list:
-    """Build HumanMessage content: plain text, or text + image for Gemini multimodal."""
-    url = (file_url or "").strip() or None
-    if not url:
-        return message
-    return [
-        {"type": "text", "text": message},
-        {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
-    ]
-
-
 def _user_facing_stream_error(message: str) -> str:
-    lower = (message or "").strip().lower()
-    if "json error injected into sse stream" in lower:
-        return "The AI service had a temporary connection issue. Please try again."
-    return message or "Upstream error"
+    from app.services.generation.error_utils import sanitize_error_message
+
+    return sanitize_error_message(message or "")
 
 
 async def _stream_endpoint(
@@ -230,7 +282,7 @@ async def _stream_endpoint(
         event_type,
         extra={
             "event": event_type,
-            "user_message": request.message,
+            "message_len": len(request.message or ""),
             "thread_id": thread_id,
             "has_file_url": bool(file_url),
             "model": resolved_model,
@@ -239,7 +291,7 @@ async def _stream_endpoint(
         },
     )
 
-    human_content = _human_message_content(request.message, request.file_url)
+    human_content = await resolve_human_message_content(request.message, request.file_url)
 
     # Only inject the SystemMessage on the very first turn of a thread.
     # On follow-up turns the checkpointer already has the system message stored.
@@ -330,6 +382,8 @@ async def _stream_endpoint(
                         elif ptype == "edit_result":
                             # Full TipTap document + ops for CoreAPI / clients
                             yield f"data: {json.dumps(payload, default=str)}\n\n"
+                        elif ptype == "clarification_needed":
+                            yield f"data: {json.dumps(payload, default=str)}\n\n"
                     continue
 
                 if mode == "error":
@@ -344,17 +398,51 @@ async def _stream_endpoint(
                 content = getattr(chunk, "content", None)
 
                 # Detect the moment the agent decides to call a tool and notify the client
-                if not status_sent and getattr(chunk, "tool_calls", None) and node == "agent":
-                    status_sent = True
+                if getattr(chunk, "tool_calls", None) and node == "agent":
                     tool_names = []
                     for tc in chunk.tool_calls or []:
                         name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
                         if name:
                             tool_names.append(name)
-                    msg = status_message
-                    if "apply_document_edit" in tool_names:
-                        msg = "Applying document edit…"
-                    yield f"data: {json.dumps({'type': 'status', 'message': msg})}\n\n"
+                    _TOOL_LABELS = {
+                        "search_user_documents": "Searching your document",
+                        "search_legal_knowledge": "Searching Ethiopian law",
+                        "list_document_financial_figures": "Finding amounts in your document",
+                        "apply_document_edit": "Drafting the edit",
+                        "ask_clarifying_questions": "Asking a quick question",
+                    }
+                    _TOOL_KINDS = {
+                        "search_user_documents": "search_doc",
+                        "search_legal_knowledge": "search_law",
+                        "list_document_financial_figures": "search_doc",
+                        "apply_document_edit": "edit",
+                        "ask_clarifying_questions": "clarify",
+                    }
+                    for name in tool_names:
+                        label = _TOOL_LABELS.get(name, status_message)
+                        kind = _TOOL_KINDS.get(name, "answer")
+                        yield (
+                            "data: "
+                            + json.dumps(
+                                {
+                                    "type": "agent_step",
+                                    "tool_name": name,
+                                    "kind": kind,
+                                    "label": label,
+                                    "status": "running",
+                                    "message": label,
+                                }
+                            )
+                            + "\n\n"
+                        )
+                    if not status_sent:
+                        status_sent = True
+                        msg = status_message
+                        if "apply_document_edit" in tool_names:
+                            msg = "Drafting edit"
+                        elif tool_names:
+                            msg = _TOOL_LABELS.get(tool_names[0], status_message)
+                        yield f"data: {json.dumps({'type': 'status', 'message': msg, 'tool_name': tool_names[0] if tool_names else None})}\n\n"
 
                 if isinstance(chunk, ToolMessage):
                     tid = getattr(chunk, "tool_call_id", None) or chunk.id or ""
@@ -408,8 +496,8 @@ async def legal_search_stream(request: ChatRequest):
     """Streaming legal search: conversational answer synthesized from retrieved sources, with citations at the end."""
     try:
         graph = get_graph()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception:
+        raise _service_unavailable_http() from None
 
     return await _stream_endpoint(
         request,
@@ -424,8 +512,8 @@ async def legal_agent_stream(request: ChatRequest):
     """Streaming legal consultant: advisory answers with citations at the end."""
     try:
         graph = get_graph()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception:
+        raise _service_unavailable_http() from None
 
     return await _stream_endpoint(
         request,
@@ -446,26 +534,47 @@ async def doc_agent_stream(request: DocChatRequest):
     enable_edit = isinstance(request.doc_json, dict) and request.doc_json.get("type") == "doc"
     try:
         graph = get_doc_graph(request.doc_id, enable_edit=enable_edit)
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception:
+        raise _service_unavailable_http() from None
 
+    # Never fall back UI/chat language → document_language (that caused Amharic UI
+    # sessions to rewrite English contracts when the user only asked a question).
     doc_lang = request.document_language
-    if not doc_lang and request.language:
-        doc_lang = (
-            request.language.value if hasattr(request.language, "value") else str(request.language)
-        )
+
+    message = request.message
+    if enable_edit:
+        try:
+            from app.services.drafting.editing.live_document import (
+                augment_message_with_live_document,
+            )
+
+            message = augment_message_with_live_document(message, request.doc_json)
+        except Exception:
+            log.exception("live_document augment skipped")
+        try:
+            from app.services.drafting.editing.financial_figures import (
+                augment_message_with_financial_figures,
+            )
+
+            message = augment_message_with_financial_figures(message, request.doc_json)
+        except Exception:
+            # Optional grounding helper — never fail the whole consult turn.
+            log.exception("financial_figures augment skipped")
 
     return await _stream_endpoint(
         ChatRequest(
-            message=request.message, thread_id=request.thread_id, language=request.language
+            message=message, thread_id=request.thread_id, language=request.language
         ),
         event_type="doc_agent_request",
-        system_prompt=_apply_language(DOC_CONSULTANT_SYSTEM, request.language),
+        system_prompt=_apply_language(
+            DOC_CONSULTANT_SYSTEM, request.language, document_scope=True
+        ),
         graph=graph,
         status_message="Searching documents and legal knowledge base…",
         extra_configurable={
             "doc_id": request.doc_id,
             "doc_json": request.doc_json if enable_edit else None,
             "document_language": doc_lang,
+            "user_message": request.message,
         },
     )

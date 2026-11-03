@@ -1,5 +1,7 @@
 """JSON schemas for generation LLM responses."""
 
+from app.services.generation.clarification_questions import QUESTION_OBJECT_SCHEMA
+
 DOCUMENT_SCHEMA = {
     "type": "object",
     "required": ["metadata", "pages"],
@@ -37,7 +39,16 @@ ANALYSIS_RESPONSE_SCHEMA = {
         "document_type": {"type": "string"},
         "language": {"type": "string", "enum": ["en", "am", "om"]},
         "extracted_info": {"type": "object", "additionalProperties": True},
-        "questions": {"type": "array", "items": {"type": "string"}},
+        # Accept structured objects; strings still parsed then normalized in agent.
+        "questions": {
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    QUESTION_OBJECT_SCHEMA,
+                    {"type": "string"},
+                ]
+            },
+        },
         "ready_to_generate": {"type": "boolean"},
         "response_message": {"type": "string"},
     },
@@ -50,6 +61,14 @@ CLARIFICATION_RESPONSE_SCHEMA = {
         "updated_requirements": {"type": "object", "additionalProperties": True},
         "ready_to_generate": {"type": "boolean"},
         "response_message": {"type": "string"},
-        "questions": {"type": "array", "items": {"type": "string"}},
+        "questions": {
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    QUESTION_OBJECT_SCHEMA,
+                    {"type": "string"},
+                ]
+            },
+        },
     },
 }

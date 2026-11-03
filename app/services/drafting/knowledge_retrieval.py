@@ -41,6 +41,8 @@ def _compliance_llm(model: str | None = None, temperature: float | None = None) 
         temperature=temp,
         streaming=False,
         seed=settings.COMPLIANCE_ANALYSIS_SEED,
+        timeout=120,
+        max_retries=2,
     )
 
 

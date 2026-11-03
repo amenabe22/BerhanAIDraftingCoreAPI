@@ -17,6 +17,7 @@ from app.services.generation.document_builder import DocumentBuilder
 from app.services.generation.document_validator import DocumentValidator
 from app.services.generation.error_utils import sanitize_error_message
 from app.services.generation.json_syntax_checker import JSONSyntaxChecker
+from app.services.generation.clarification_questions import normalize_questions
 from app.services.generation.json_utils import parse_json
 from app.services.generation.language import normalize_language_code
 from app.services.generation.prompt_builder import PromptBuilder
@@ -41,14 +42,10 @@ logger = logging.getLogger(__name__)
 
 
 def _human_content(message: str, file_url: str | None) -> str | list[dict[str, Any]]:
-    """Build LangChain human content, optionally multimodal via file_url."""
-    url = (file_url or "").strip()
-    if not url:
-        return message
-    return [
-        {"type": "text", "text": message},
-        {"type": "image_url", "image_url": {"url": url}},
-    ]
+    """Build LangChain human content; docs are extracted / data-URLed, images stay multimodal."""
+    from app.services.chat_attachments import resolve_human_message_content_sync
+
+    return resolve_human_message_content_sync(message, file_url)
 
 
 class GenerationAgent:
@@ -144,6 +141,8 @@ class GenerationAgent:
                     "language": preferred_language or "en",
                 }
 
+            analysis["questions"] = normalize_questions(analysis.get("questions"))
+
             self.store.add_user_message(thread_id, user_prompt)
             self.store.add_system_response(
                 thread_id, analysis.get("response_message", "")
@@ -219,6 +218,8 @@ class GenerationAgent:
                     "response_message": response_text,
                     "questions": [],
                 }
+
+            result["questions"] = normalize_questions(result.get("questions"))
 
             self.store.add_user_message(thread_id, user_message)
             self.store.add_system_response(
@@ -536,6 +537,21 @@ class GenerationAgent:
                     or requirements.get("document_type", "Document"),
                     "language": preferred_lang,
                 }
+
+            from app.services.generation.page_clamp import (
+                clamp_document_to_pages,
+                resolve_target_pages,
+            )
+
+            target_pages = resolve_target_pages(requirements)
+            if target_pages is not None:
+                document, clamped_count = clamp_document_to_pages(document, target_pages)
+                logger.info(
+                    "[%s] Page clamp applied: target=%s, final_pages=%s",
+                    thread_id,
+                    target_pages,
+                    clamped_count,
+                )
 
             await emitter.generation_progress(
                 thread_id, 0.9, "validating_document", "Validating streamed document..."

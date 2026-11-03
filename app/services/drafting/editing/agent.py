@@ -22,10 +22,15 @@ from app.services.drafting.editing.prompts import (
     verify_system_prompt,
     verify_user_prompt,
 )
+from app.services.drafting.editing.financial_figures import extract_financial_figures
 from app.services.drafting.editing.retrieval import (
+    build_document_skeleton,
     expand_section_blocks,
+    match_named_section_headings,
+    merge_candidate_blocks,
     neighbor_blocks,
     rank_blocks_for_instruction,
+    structural_candidate_blocks,
 )
 from app.services.drafting.editing.schemas import (
     ensure_op_ids,
@@ -42,6 +47,14 @@ logger = logging.getLogger(__name__)
 
 _GLOBAL_REPLACE_RE = re.compile(
     r"(?:change|replace|swap)\s+(.+?)\s+(?:to|with)\s+(.+?)(?:\s+(?:everywhere|throughout|in all|globally))?$",
+    re.IGNORECASE,
+)
+
+_FINANCIAL_EDIT_RE = re.compile(
+    r"(?:financial|amount|payment|penalty|fee|capital|contribution|"
+    r"ገንዘብ|ብር|ETB|አስተዋጾ|ክፍያ|ቅጣት|ድርሻ|"
+    r"(?:lower|reduce|halve|raise|increase|change).{0,40}(?:\d+\s*%|half|50))"
+    r"|(?:\d+\s*%).{0,40}(?:lower|reduce|halve|raise|financial|amount)",
     re.IGNORECASE,
 )
 
@@ -103,37 +116,67 @@ class SemanticEditAgent:
                     output_language,
                 )
 
-            # LOCATE: rerank + LLM selector
+            # LOCATE: skeleton + dimensional plan + semantic/structural candidates
             t0 = time.perf_counter()
+            skeleton = build_document_skeleton(all_blocks)
             ranked = rank_blocks_for_instruction(instruction, all_blocks)
+            if _FINANCIAL_EDIT_RE.search(instruction or ""):
+                amount_hits = extract_financial_figures(doc_json)
+                # Prefer real amount-bearing blocks over semantic near-misses
+                by_id = {b.get("block_id"): b for b in all_blocks}
+                money_blocks: list[dict[str, Any]] = []
+                for hit in amount_hits:
+                    bid = hit.get("block_id")
+                    if bid and bid in by_id:
+                        blk = dict(by_id[bid])
+                        blk["rerank_score"] = max(float(blk.get("rerank_score") or 0), 0.99)
+                        money_blocks.append(blk)
+                if money_blocks:
+                    ranked = merge_candidate_blocks(money_blocks, ranked)
+                    metrics["stages"]["financial_figure_boost"] = len(money_blocks)
             metrics["stages"]["rerank_ms"] = int((time.perf_counter() - t0) * 1000)
+            metrics["stages"]["skeleton_stats"] = skeleton.get("stats")
 
-            locate_result = await edit_llm.complete_json(
-                locate_system_prompt(),
-                locate_user_prompt(instruction, ranked[: settings.EDIT_SELECTOR_TOP_K]),
+            locate_result, targets, scope, locate_confidence = await self._locate_targets(
+                instruction,
+                all_blocks,
+                ranked,
+                skeleton,
+                metrics,
             )
-            metrics["stages"]["locate"] = locate_result
 
-            targets = (locate_result or {}).get("targets") or []
-            scope = (locate_result or {}).get("scope", "single")
-            locate_confidence = float((locate_result or {}).get("confidence") or 0.0)
-
-            if not targets or locate_confidence < settings.EDIT_MIN_CONFIDENCE:
+            if not targets:
                 return self._no_change_result(
                     doc_json,
                     operation_id,
                     metrics,
                     started,
-                    "Could not confidently locate target block(s) for the instruction.",
+                    "Could not confidently locate target block(s) for the instruction. "
+                    "Try naming a section or quoting a short phrase from the clause to edit.",
                 )
 
             target_ids = {t["block_id"] for t in targets if t.get("block_id")}
 
             # Section expand: heading seeds → full section body (fixes multi-block
             # requests like "shorten DEFINITIONS" that previously got tiny context).
+            # Skip expand when structural multi-body targets were already resolved
+            # (thin body ids), but always expand named heading seeds.
+            selection_mode = (locate_result or {}).get("selection_mode") or "semantic"
+            spatial_scope = (locate_result or {}).get("spatial_scope") or "pinpoint"
             seed_blocks = [b for b in all_blocks if b["block_id"] in target_ids]
             has_heading_seed = any(b.get("type") == "heading" for b in seed_blocks)
-            if scope in ("multiple", "section", "global") or has_heading_seed:
+            named_multi = selection_mode == "explicit_section" and (
+                spatial_scope == "multi_section" or len(target_ids) > 1
+            )
+            structural_body_multi = selection_mode in ("structural", "hybrid") or (
+                spatial_scope == "document_wide" and selection_mode != "explicit_section"
+            )
+            # multi_section + explicit_section = named headings → expand; structural thinness → don't
+            if has_heading_seed and (
+                named_multi
+                or selection_mode == "explicit_section"
+                or not structural_body_multi
+            ):
                 expanded_ids = expand_section_blocks(all_blocks, target_ids)
                 if expanded_ids != target_ids:
                     metrics["stages"]["section_expand"] = {
@@ -142,9 +185,15 @@ class SemanticEditAgent:
                     }
                     target_ids = expanded_ids
                     if scope == "single":
-                        scope = "section"
+                        scope = "section" if len(target_ids) <= 3 else "multiple"
+                    elif named_multi:
+                        scope = "multiple"
 
-            if scope == "global":
+            structural_multi = structural_body_multi or (
+                spatial_scope == "multi_section" and selection_mode != "explicit_section"
+            )
+
+            if scope == "global" and not structural_multi and not named_multi:
                 edit_context = [
                     b
                     for b in all_blocks
@@ -154,7 +203,12 @@ class SemanticEditAgent:
                         if len(tok) > 3
                     )
                 ] or ranked[:10]
-            elif scope in ("section", "multiple") or len(target_ids) > 3:
+            elif (
+                scope in ("section", "multiple")
+                or len(target_ids) > 3
+                or structural_multi
+                or named_multi
+            ):
                 # Full section / multi-target context — no 3-block neighbor cap.
                 id_order = {b["block_id"]: i for i, b in enumerate(all_blocks)}
                 edit_context = sorted(
@@ -163,8 +217,31 @@ class SemanticEditAgent:
                 )
                 max_section = settings.EDIT_SECTION_MAX_BLOCKS
                 if max_section and len(edit_context) > max_section:
-                    edit_context = edit_context[:max_section]
+                    if named_multi and has_heading_seed:
+                        # Fair per-section budget so later named sections aren't dropped
+                        heading_seeds = [
+                            b["block_id"]
+                            for b in seed_blocks
+                            if b.get("type") == "heading"
+                        ]
+                        per = max(3, max_section // max(1, len(heading_seeds)))
+                        kept: list[dict[str, Any]] = []
+                        for hid in heading_seeds:
+                            section_ids = expand_section_blocks(all_blocks, {hid})
+                            section_blocks = [
+                                b
+                                for b in edit_context
+                                if b["block_id"] in section_ids
+                            ]
+                            kept.extend(section_blocks[:per])
+                            if len(kept) >= max_section:
+                                break
+                        edit_context = kept[:max_section]
+                    else:
+                        edit_context = edit_context[:max_section]
                     target_ids = {b["block_id"] for b in edit_context}
+                if (structural_multi or named_multi) and scope == "single":
+                    scope = "multiple"
             else:
                 edit_context = neighbor_blocks(all_blocks, target_ids, window=1)
 
@@ -252,8 +329,254 @@ class SemanticEditAgent:
             )
 
         except Exception as exc:
-            logger.exception("Semantic edit failed op=%s", operation_id)
+            logger.exception("Semantic edit failed op=%s err=%s", operation_id, exc)
             return self._error_result(doc_json, operation_id, metrics, started, str(exc))
+
+    async def _locate_targets(
+        self,
+        instruction: str,
+        all_blocks: list[dict[str, Any]],
+        ranked: list[dict[str, Any]],
+        skeleton: dict[str, Any],
+        metrics: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str, float]:
+        """Dimensional locate with structural/semantic candidates and soft recovery."""
+
+        def _normalize_locate(raw: dict[str, Any] | None) -> dict[str, Any]:
+            data = dict(raw or {})
+            data.setdefault("spatial_scope", "pinpoint")
+            data.setdefault("selection_mode", "semantic")
+            data.setdefault("thinness", "below_median")
+            data.setdefault("edit_intent", "other")
+            data.setdefault("scope", "single")
+            data.setdefault("targets", [])
+            data.setdefault("confidence", 0.0)
+            return data
+
+        def _needs_structural(plan: dict[str, Any]) -> bool:
+            # Named outline headings use explicit_section even with multi_section scope —
+            # never replace those heading seeds with thin-body structural filters.
+            if plan.get("selection_mode") == "explicit_section":
+                return False
+            return (plan.get("selection_mode") in ("structural", "hybrid")) or (
+                plan.get("spatial_scope") in ("document_wide", "multi_section")
+            )
+
+        def _infer_edit_action(plan: dict[str, Any] | None = None) -> str:
+            intent = ((plan or {}).get("edit_intent") or "").lower()
+            if intent in ("expand", "shorten", "rewrite", "replace"):
+                return "expand" if intent == "expand" else intent
+            lower = instruction.lower()
+            expand_hints = (
+                "expand",
+                "enrich",
+                "more detail",
+                "አስፋ",
+                "ማስፋት",
+                "አብራራ",
+                "በዝርዝር",
+            )
+            if any(h in lower or h in instruction for h in expand_hints):
+                return "expand"
+            return "rewrite"
+
+        def _resolve_from_plan(
+            plan: dict[str, Any],
+            *,
+            allow_empty_targets: bool,
+        ) -> tuple[list[dict[str, Any]], str, float]:
+            targets = list(plan.get("targets") or [])
+            scope = plan.get("scope") or "single"
+            confidence = float(plan.get("confidence") or 0.0)
+            thinness = plan.get("thinness") or "below_median"
+
+            # Preserve heading targets for named sections (do not filter vs body structural ids)
+            if plan.get("selection_mode") == "explicit_section" and targets:
+                if len(targets) > 1:
+                    scope = "multiple"
+                    confidence = max(confidence, 0.75)
+                return targets, scope, confidence
+
+            if _needs_structural(plan):
+                structural = structural_candidate_blocks(
+                    all_blocks,
+                    thinness=str(thinness),
+                    max_targets=settings.EDIT_STRUCTURAL_MAX_TARGETS,
+                )
+                if plan.get("selection_mode") == "hybrid":
+                    structural = merge_candidate_blocks(
+                        structural,
+                        ranked[: settings.EDIT_SELECTOR_TOP_K],
+                    )
+                structural_ids = {b["block_id"] for b in structural}
+                action = (
+                    "expand" if (plan.get("edit_intent") == "expand") else "rewrite"
+                )
+
+                def _structural_target(bid: str) -> dict[str, Any]:
+                    return {
+                        "block_id": bid,
+                        "action": action,
+                        "confidence": max(confidence, 0.65),
+                        "reason": "structural_feature_match",
+                    }
+
+                if targets:
+                    # Prefer LLM picks that fall inside the structural filter
+                    kept = [
+                        t
+                        for t in targets
+                        if t.get("block_id") and t["block_id"] in structural_ids
+                    ]
+                    if kept:
+                        targets = kept
+                    elif allow_empty_targets or confidence >= settings.EDIT_MIN_CONFIDENCE * 0.9:
+                        targets = [_structural_target(b["block_id"]) for b in structural]
+                    if plan.get("selection_mode") == "hybrid" and structural:
+                        # Hybrid: union semantic LLM picks (existing) with structural filter
+                        id_set = {t.get("block_id") for t in targets if t.get("block_id")}
+                        for b in structural:
+                            if b["block_id"] not in id_set:
+                                targets.append(_structural_target(b["block_id"]))
+                                id_set.add(b["block_id"])
+                elif allow_empty_targets or confidence >= settings.EDIT_MIN_CONFIDENCE * 0.9:
+                    targets = [_structural_target(b["block_id"]) for b in structural]
+                if targets:
+                    scope = "multiple" if len(targets) > 1 else scope
+                    confidence = max(confidence, 0.65)
+                metrics["stages"]["structural_candidates"] = len(structural)
+
+            return targets, scope, confidence
+
+        # Deterministic named-section resolve (before LLM) for multi-heading instructions
+        named_headings = match_named_section_headings(
+            instruction, skeleton.get("outline") or []
+        )
+        if len(named_headings) >= 2:
+            action = _infer_edit_action()
+            plan = _normalize_locate(
+                {
+                    "spatial_scope": "multi_section",
+                    "selection_mode": "explicit_section",
+                    "structural_intent": "named outline headings listed in the instruction",
+                    "edit_intent": action if action in ("expand", "shorten", "rewrite") else "expand",
+                    "targets": [
+                        {
+                            "block_id": h["block_id"],
+                            "action": action,
+                            "confidence": 0.9,
+                            "reason": f"named_section:{h.get('title') or h['block_id']}",
+                        }
+                        for h in named_headings
+                    ],
+                    "scope": "multiple",
+                    "confidence": 0.9,
+                }
+            )
+            metrics["stages"]["named_sections"] = [
+                {"block_id": h["block_id"], "title": h.get("title")} for h in named_headings
+            ]
+            metrics["stages"]["locate"] = plan
+            return plan, list(plan["targets"]), "multiple", 0.9
+
+        selector_k = settings.EDIT_SELECTOR_TOP_K
+        locate_result = await edit_llm.complete_json(
+            locate_system_prompt(),
+            locate_user_prompt(
+                instruction,
+                ranked[:selector_k],
+                skeleton=skeleton,
+            ),
+        )
+        plan = _normalize_locate(locate_result)
+        # Single named heading: seed explicit_section when LLM returned no targets
+        if len(named_headings) == 1 and not (plan.get("targets") or []):
+            action = _infer_edit_action(plan)
+            plan["spatial_scope"] = "section"
+            plan["selection_mode"] = "explicit_section"
+            plan["scope"] = "section"
+            h = named_headings[0]
+            plan["targets"] = [
+                {
+                    "block_id": h["block_id"],
+                    "action": action,
+                    "confidence": 0.85,
+                    "reason": f"named_section:{h.get('title') or h['block_id']}",
+                }
+            ]
+            plan["confidence"] = max(float(plan.get("confidence") or 0), 0.8)
+            metrics["stages"]["named_sections"] = [
+                {"block_id": h["block_id"], "title": h.get("title")}
+            ]
+        metrics["stages"]["locate"] = plan
+
+        # Enrich candidates for hybrid/structural before resolve
+        if _needs_structural(plan):
+            structural = structural_candidate_blocks(
+                all_blocks,
+                thinness=str(plan.get("thinness") or "below_median"),
+                max_targets=settings.EDIT_STRUCTURAL_MAX_TARGETS,
+            )
+            ranked_for_pick = merge_candidate_blocks(structural, ranked[:selector_k])
+            # Second pass only if first targets empty — avoid double LLM when targets present
+            if not (plan.get("targets") or []):
+                locate_retry = await edit_llm.complete_json(
+                    locate_system_prompt(),
+                    locate_user_prompt(
+                        instruction,
+                        ranked_for_pick[: max(selector_k, len(structural))],
+                        skeleton=skeleton,
+                    ),
+                )
+                if locate_retry:
+                    plan = _normalize_locate({**plan, **locate_retry})
+                    metrics["stages"]["locate_structural_pass"] = locate_retry
+
+        targets, scope, locate_confidence = _resolve_from_plan(plan, allow_empty_targets=True)
+
+        if targets and locate_confidence >= settings.EDIT_MIN_CONFIDENCE:
+            return plan, targets, scope, locate_confidence
+
+        # Soft recovery: structural plan with low LLM confidence still usable
+        if _needs_structural(plan):
+            targets, scope, locate_confidence = _resolve_from_plan(
+                {**plan, "confidence": max(locate_confidence, 0.65)},
+                allow_empty_targets=True,
+            )
+            if targets:
+                metrics["stages"]["locate_recovery"] = "structural"
+                plan["confidence"] = locate_confidence
+                return plan, targets, scope, locate_confidence
+
+        # Soft recovery: broaden semantic pool and retry once
+        if locate_confidence < settings.EDIT_MIN_CONFIDENCE or not targets:
+            retry_k = settings.EDIT_SELECTOR_RETRY_TOP_K
+            broader = rank_blocks_for_instruction(
+                instruction, all_blocks, top_k=retry_k
+            )
+            locate_retry = await edit_llm.complete_json(
+                locate_system_prompt(),
+                locate_user_prompt(
+                    instruction,
+                    broader[:retry_k],
+                    skeleton=skeleton,
+                ),
+            )
+            metrics["stages"]["locate_retry"] = locate_retry
+            plan = _normalize_locate({**plan, **(locate_retry or {})})
+            targets, scope, locate_confidence = _resolve_from_plan(
+                plan, allow_empty_targets=_needs_structural(plan)
+            )
+            if targets and locate_confidence >= settings.EDIT_MIN_CONFIDENCE:
+                metrics["stages"]["locate_recovery"] = "retry_broaden"
+                return plan, targets, scope, locate_confidence
+            if targets and _needs_structural(plan):
+                metrics["stages"]["locate_recovery"] = "retry_structural"
+                return plan, targets, scope, max(locate_confidence, 0.65)
+
+        if locate_confidence < settings.EDIT_MIN_CONFIDENCE:
+            return plan, [], scope, locate_confidence
+        return plan, targets, scope, locate_confidence
 
     def _try_global_replace(
         self, instruction: str, blocks: list[dict[str, Any]]

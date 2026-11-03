@@ -64,9 +64,35 @@ class _FlatPayloadQdrantVectorStore(QdrantVectorStore):
 
 
 def _get_qdrant_client() -> QdrantClient:
+    # Parse host/port explicitly. qdrant-client defaults missing ports to 6333,
+    # which breaks HTTPS behind nginx on :443.
+    url = (settings.QDRANT_URL or "").rstrip("/")
+    use_https = url.startswith("https://")
+    if url.startswith("https://"):
+        url_part = url[len("https://") :]
+    elif url.startswith("http://"):
+        url_part = url[len("http://") :]
+    else:
+        url_part = url
+    if "/" in url_part:
+        url_part = url_part.split("/", 1)[0]
+    if ":" in url_part:
+        host, port_str = url_part.split(":", 1)
+        try:
+            port = int(port_str)
+        except ValueError:
+            port = 443 if use_https else 80
+    else:
+        host = url_part
+        port = 443 if use_https else 6333
+
     return QdrantClient(
-        url=settings.QDRANT_URL,
+        host=host,
+        port=port,
+        https=use_https,
         api_key=settings.QDRANT_API_KEY,
+        prefer_grpc=False,
+        timeout=60,
         check_compatibility=False,
         verify=settings.QDRANT_VERIFY_SSL,
     )

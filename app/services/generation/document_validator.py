@@ -67,15 +67,19 @@ class DocumentValidator:
         """
         issues = []
         
-        # Get user-specified page count or use default
+        # Explicit num_pages is an exact hard target (min == max == N)
         target_pages = None
         if requirements:
             num_pages = requirements.get("num_pages")
             if isinstance(num_pages, int) and 1 <= num_pages <= 20:
                 target_pages = num_pages
         
-        min_pages = target_pages if target_pages else settings.MIN_PAGES
-        max_pages = settings.MAX_PAGES
+        if target_pages is not None:
+            min_pages = target_pages
+            max_pages = target_pages
+        else:
+            min_pages = settings.MIN_PAGES
+            max_pages = settings.MAX_PAGES
         
         # Handle TipTap format vs legacy format
         if DocumentValidator._is_tiptap_format(document):

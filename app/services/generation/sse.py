@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import Any  # noqa: F401 — used by clarification_needed signature
 
 
 class SSEEmitter:
@@ -29,15 +29,17 @@ class SSEEmitter:
         self,
         thread_id: str,
         *,
-        questions: list[str],
+        questions: list[Any],
         response_message: str,
         ready_to_generate: bool = False,
     ) -> None:
+        from app.services.generation.clarification_questions import normalize_questions
+
         await self.emit(
             {
                 "type": "clarification_needed",
                 "thread_id": thread_id,
-                "questions": questions,
+                "questions": normalize_questions(questions),
                 "response_message": response_message,
                 "ready_to_generate": ready_to_generate,
             }
