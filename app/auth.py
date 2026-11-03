@@ -23,7 +23,12 @@ _PUBLIC_PATHS = frozenset({"/health", "/ready", "/favicon.ico"})
 
 
 def _expected_key() -> str:
-    return (getattr(settings, "BERHAN_SEARCH_API_KEY", None) or "").strip()
+    # Prefer process env (docker compose env_file) then Settings — Settings may
+    # miss fields if an older image/config is mixed during rolling deploys.
+    return (
+        (os.getenv("BERHAN_SEARCH_API_KEY") or "").strip()
+        or (getattr(settings, "BERHAN_SEARCH_API_KEY", None) or "").strip()
+    )
 
 
 def _extract_key(request: Request) -> str:
