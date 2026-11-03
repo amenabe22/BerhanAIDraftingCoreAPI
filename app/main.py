@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import uuid
 from contextlib import asynccontextmanager
 from enum import Enum
@@ -201,9 +202,10 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
     """Extract unique citations from all ToolMessages produced during the run.
 
     Handles header formats:
-      [Source: <document_id> | Article <item_id> | <title>]  – legal knowledge
-      [Document section … | <type>]                         – user doc excerpts
-      [Doc: <doc_id> | Block: <block_id> | …]               – legacy tool headers
+      [Source: <document_id> | Article <item_id> | <title>]     – statutes
+      [Cassation: <document_id> | Case <case_number> | <title>] – cassation decisions
+      [Document section … | <type>]                            – user doc excerpts
+      [Doc: <doc_id> | Block: <block_id> | …]                  – legacy tool headers
     """
     seen: set[str] = set()
     citations: list[dict] = []
@@ -214,8 +216,9 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
         for block in content.split("\n\n"):
             block = block.strip()
             is_source = block.startswith("[Source:")
+            is_cassation = block.startswith("[Cassation:")
             is_doc = block.startswith("[Doc:") or block.startswith("[Document section")
-            if not is_source and not is_doc:
+            if not is_source and not is_cassation and not is_doc:
                 continue
             header_end = block.find("]")
             if header_end == -1:
@@ -224,7 +227,25 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
             text_body = block[header_end + 1 :].strip()
             parts = [p.strip() for p in header.split("|")]
 
-            if is_source:
+            if is_cassation:
+                doc_id = parts[0].replace("Cassation:", "").strip() if parts else ""
+                case_number = parts[1].replace("Case", "").strip() if len(parts) > 1 else ""
+                title = " | ".join(parts[2:]).strip()
+                key = f"cassation:{doc_id}:{case_number}"
+                if not doc_id or key in seen:
+                    continue
+                seen.add(key)
+                citations.append(
+                    {
+                        "doc_type": "cassation",
+                        "document_id": doc_id,
+                        "case_number": case_number,
+                        "item_id": "",
+                        "title": title,
+                        "content": text_body[:300],
+                    }
+                )
+            elif is_source:
                 doc_id = parts[0].replace("Source:", "").strip() if parts else ""
                 item_id = parts[1].replace("Article", "").strip() if len(parts) > 1 else ""
                 title = parts[2].strip() if len(parts) > 2 else ""
@@ -234,6 +255,7 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
                 seen.add(key)
                 citations.append(
                     {
+                        "doc_type": "statute",
                         "document_id": doc_id,
                         "item_id": item_id,
                         "title": title,
@@ -272,6 +294,26 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
                     }
                 )
     return citations
+
+
+_MAX_CITATIONS = 10
+
+
+def _citation_in_answer(cite: dict, answer: str) -> bool:
+    if cite.get("doc_type") == "cassation":
+        number = str(cite.get("case_number") or "").strip()
+        return bool(number) and re.search(rf"(?<!\d){re.escape(number)}(?!\d)", answer) is not None
+    if cite.get("doc_type") == "statute":
+        item = str(cite.get("item_id") or "").strip()
+        return bool(item) and re.search(rf"(?<![\d/]){re.escape(item)}(?!\d)", answer) is not None
+    return True
+
+
+def _select_citations(citations: list[dict], answer: str) -> list[dict]:
+    """Prefer the retrieved sources the answer cites; otherwise keep retrieval order."""
+    used = [c for c in citations if _citation_in_answer(c, answer)]
+    has_legal_match = any(c.get("doc_type") in ("statute", "cassation") for c in used)
+    return (used if has_legal_match else citations)[:_MAX_CITATIONS]
 
 
 def _is_new_thread(graph, thread_id: str) -> bool:
@@ -346,6 +388,7 @@ async def _stream_endpoint(
         saw_custom_tokens = False
         fallback_token_chunks: list[str] = []
         token_sanitizer = StreamBlockIdSanitizer()
+        answer_parts: list[str] = []
         # Capture the last grounding event emitted by the ground node (if any)
         last_grounding_event: dict | None = None
         loop = asyncio.get_running_loop()
@@ -354,6 +397,7 @@ async def _stream_endpoint(
         def _emit_sanitized_token(raw: str):
             cleaned = token_sanitizer.feed(raw)
             if cleaned:
+                answer_parts.append(cleaned)
                 return f"data: {json.dumps({'type': 'token', 'content': cleaned})}\n\n"
             return None
 
@@ -440,6 +484,8 @@ async def _stream_endpoint(
                     _TOOL_LABELS = {
                         "search_user_documents": "Searching your document",
                         "search_legal_knowledge": "Searching Ethiopian law",
+                        "search_cassation_decisions": "Searching cassation decisions",
+                        "get_cassation_case": "Reading the cassation decision",
                         "list_document_financial_figures": "Finding amounts in your document",
                         "apply_document_edit": "Drafting the edit",
                         "ask_clarifying_questions": "Asking a quick question",
@@ -447,6 +493,8 @@ async def _stream_endpoint(
                     _TOOL_KINDS = {
                         "search_user_documents": "search_doc",
                         "search_legal_knowledge": "search_law",
+                        "search_cassation_decisions": "search_law",
+                        "get_cassation_case": "search_law",
                         "list_document_financial_figures": "search_doc",
                         "apply_document_edit": "edit",
                         "ask_clarifying_questions": "clarify",
@@ -506,10 +554,10 @@ async def _stream_endpoint(
                     yield line
         flushed = token_sanitizer.flush()
         if flushed:
+            answer_parts.append(flushed)
             yield f"data: {json.dumps({'type': 'token', 'content': flushed})}\n\n"
 
-        # Existing citations event — unchanged
-        citations = _parse_citations(collected)
+        citations = _select_citations(_parse_citations(collected), "".join(answer_parts))
         if citations:
             yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
 

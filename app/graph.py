@@ -24,6 +24,7 @@ from app.config import settings
 from app.llm import build_chat_llm, resolve_model
 from app.logging_config import get_logger
 from app.retrieval import get_doc_blocks_retriever_tool, get_retriever_tool
+from app.retrieval_cassation import get_cassation_tools
 from app.services.legal.grounding import (
     GroundingResult,
     repair_message,
@@ -61,9 +62,19 @@ def _tool():
     return get_retriever_tool()
 
 
+@lru_cache(maxsize=1)
+def _cassation_tools():
+    return get_cassation_tools()
+
+
+def _legal_tools() -> list:
+    """Statute search + cassation search + exact cassation lookup (one tool per corpus)."""
+    return [_tool(), *_cassation_tools()]
+
+
 def _llm_with_tools():
-    """Return an LLM bound to the legal retriever tool for the current config."""
-    return _get_llm_for_config().bind_tools([_tool()])
+    """Return an LLM bound to the legal tools for the current config."""
+    return _get_llm_for_config().bind_tools(_legal_tools())
 
 
 def _should_continue(state: dict) -> Literal["tools", "ground"]:
@@ -133,28 +144,41 @@ _ATTACHMENT_GUIDANCE = (
 )
 
 _RETRIEVAL_GUIDANCE = (
+    "LEGAL SOURCES — two separate corpora, each with its own tool:\n"
+    "- search_legal_knowledge → statutes (codes, proclamations, regulations, Constitution).\n"
+    "- search_cassation_decisions → Federal Supreme Court cassation (ሰበር) decisions, which "
+    "bind lower courts on how the law is interpreted.\n"
+    "- get_cassation_case → one specific decision by its case number.\n"
+    "Decide which corpora the question needs, then call every needed tool in the SAME turn "
+    "(parallel tool calls): case law / court practice / a concrete dispute → cassation (usually "
+    "plus statutes for the governing articles); what the written law says → statutes (add "
+    "cassation when courts' interpretation matters); a named case number or a decision the "
+    "user is reading → get_cassation_case. Write each tool query for that corpus — cassation "
+    "decisions are in Amharic, so describe the legal issue in Amharic legal terms there.\n\n"
     "RETRIEVAL — MANDATORY RULES:\n"
-    "1. SEARCH FIRST: For ANY question about Ethiopian law — statutes, contracts, "
+    "1. SEARCH FIRST: For ANY question about Ethiopian law — statutes, case law, contracts, "
     "obligations, rights, procedures, employment, tax, inheritance, property, commercial "
-    "law, or any other legal topic — call search_legal_knowledge BEFORE stating any "
+    "law, or any other legal topic — call the relevant legal tool(s) BEFORE stating any "
     "legal conclusion. Never assert law from general knowledge alone.\n"
     "2. CITATION CONTRACT: Every legal sentence must be backed by a pinpoint from the "
-    "tool results. Format: 'Under Article N of [Instrument]…' or 'አንቀጽ N…'. Use the "
-    "document_id and item_id from the [Source: … | Article …] headers returned by the "
-    "tool. ONLY cite instruments that appear in the tool results just received.\n"
+    "tool results: 'Under Article N of [Instrument]…' / 'አንቀጽ N…' for [Source: …] blocks, "
+    "and 'ሰበር መዝገብ ቁጥር N' / 'Cassation File No. N' for [Cassation: … | Case N | …] blocks. "
+    "ONLY cite articles and case numbers that appear in the tool results just received. "
+    "When the user asked about court decisions and cassation passages were returned, lead "
+    "with those holdings. Never paste raw tool headers or document_id slugs into the reply.\n"
     "3. CORRECT INSTRUMENT: If the question concerns a company, director, board, "
     "shareholders, or commercial partnerships → cite from the Commercial Code "
     "(Proclamation No. 1243/2021) as the PRIMARY source. Do NOT answer company/director "
     "questions using only the Civil Code associations chapter even if Civil Code chunks "
     "appear in results.\n"
-    "4. KB GAP: If search_legal_knowledge returns no relevant provision, state this "
+    "4. KB GAP: If the legal tools return no relevant provision or decision, state this "
     "explicitly in the reply language (e.g. English: 'The knowledge base does not contain "
     "a specific provision on this point.' / Amharic: 'በዕውቀት መሠረቱ ላይ ለዚህ ጉዳይ የተወሰነ ድንጋጌ አልተገኘም።'). "
     "Do NOT invent article numbers, freeze durations, case holdings, or procedural "
     "timelines. Do NOT write 'ከላይ የተጠቀሱት አንቀጾች' unless those exact article numbers "
     "appeared in the tool text just received.\n"
     "5. FOLLOW-UPS: On every turn that adds or extends a legal claim — including "
-    "multi-turn conversations — call search_legal_knowledge again. A procedural steps "
+    "multi-turn conversations — call the relevant legal tool(s) again. A procedural steps "
     "list or advisory playbook with no article citations is not acceptable."
 )
 
@@ -170,7 +194,7 @@ LEGAL_AGENT_SYSTEM = f"""{_IDENTITY_GUARDRAIL}
 
 {_ATTACHMENT_GUIDANCE}
 
-You are a legal information assistant with access to a legal knowledge base covering Ethiopian law — including tax, commercial, employment, and related statutes.
+You are a legal information assistant with access to Ethiopian law: statutes (tax, commercial, employment, civil, criminal and more) and Federal Supreme Court cassation (ሰበር) decisions.
 
 {_RETRIEVAL_GUIDANCE}
 After searching, synthesize what you retrieve into a clear, readable answer. Reference specific articles you found (e.g. "Under Article 1726 of the Civil Code…" or "አዋጅ ቁጥር 1156/2019 አንቀጽ 43 መሰረት…"). Do not dump raw source blocks. If the knowledge base returns no relevant content, say so clearly — do not invent provisions."""
@@ -186,7 +210,7 @@ LEGAL_ADVISOR_SYSTEM = f"""{_IDENTITY_GUARDRAIL}
 
 {_ATTACHMENT_GUIDANCE}
 
-You are a legal consultant and advisor specializing in Ethiopian law — including tax, commercial, employment, and related statutes.
+You are a legal consultant and advisor specializing in Ethiopian law — statutes (tax, commercial, employment, civil, criminal and more) and Federal Supreme Court cassation (ሰበር) decisions.
 
 {_RETRIEVAL_GUIDANCE}
 After searching, give clear, consultative answers: explain what the law says, implications or options, and practical considerations — in plain language. Reference specific articles or provisions you retrieved (e.g. "Under Article 1726 of the Civil Code…" or "አዋጅ ቁጥር 1156/2019 አንቀጽ 43 …"). Do not dump raw source blocks. If nothing relevant is found, say so and note that qualified legal counsel may be needed for the specific transaction — do not invent provisions."""
@@ -199,9 +223,10 @@ DOC_CONSULT_ONLY_SYSTEM = f"""{_IDENTITY_GUARDRAIL}
 You are a hybrid legal consultant for an open document. Search and advise only — you do not have a document-mutation tool in this turn.
 Never ask the user to paste or re-identify the document when CURRENT OPEN DOCUMENT text or search_user_documents is available.
 
-You have two tools:
+Tools:
 1. search_user_documents — semantic search over the loaded document
-2. search_legal_knowledge — Ethiopian law knowledge base
+2. search_legal_knowledge — Ethiopian statutes
+3. search_cassation_decisions / get_cassation_case — Federal Supreme Court cassation (ሰበር) decisions
 
 DEFAULT: call search_user_documents first for document-related questions. Answer clearly with human citations (headings/clauses/articles). Never invent that you edited the document.
 
@@ -216,12 +241,13 @@ DOC_CONSULTANT_SYSTEM = f"""{_IDENTITY_GUARDRAIL}
 You are a multipurpose legal document agent: you both consult on and edit the open document.
 A document is already loaded and ready. Never ask the user to describe, paste, upload, or identify "what kind of document" this is when CURRENT OPEN DOCUMENT text is in the message or search_user_documents can run.
 
-You have five tools — pick by the user's goal (reason about intent; do not keyword-match):
+Tools — pick by the user's goal (reason about intent; do not keyword-match):
 1. search_user_documents — find clauses/topics in the document (often misses short amount lines)
 2. list_document_financial_figures — scan live doc for currency amounts / % / ratios; required for money edits
 3. search_legal_knowledge — Ethiopian statutes / proclamations / code
-4. apply_document_edit — mutate the open document text
-5. ask_clarifying_questions — UI form only when a real choice is required before a safe edit/answer
+4. search_cassation_decisions / get_cassation_case — cassation (ሰበር) case law
+5. apply_document_edit — mutate the open document text
+6. ask_clarifying_questions — UI form only when a real choice is required before a safe edit/answer
 
 CAPABILITY (critical):
 - You CAN and MUST edit when the user wants wording changed. Never claim you can only analyze, only advise, or that the user must edit manually.
@@ -598,7 +624,7 @@ def _ground_node(state: dict) -> dict:
 
 
 def build_graph():
-    tool_node = ToolNode([_tool()])
+    tool_node = ToolNode(_legal_tools())
 
     workflow = StateGraph(AgentState)
     workflow.add_node("agent", _agent_node)
@@ -664,7 +690,7 @@ def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
     _default_llm = build_chat_llm(
         model=resolve_model(None), enable_reasoning=False, streaming=True
     )
-    tools = [_tool(), doc_tool]
+    tools = [*_legal_tools(), doc_tool]
     if enable_edit:
         tools.append(create_list_document_financial_figures_tool())
         tools.append(create_apply_document_edit_tool())
@@ -744,7 +770,7 @@ def build_doc_graph(doc_id: str, *, enable_edit: bool = True):
 
 # Cache of compiled doc graphs keyed by (doc_id, enable_edit, toolset_version).
 # Bump toolset_version when binding new tools so long-lived processes rebuild.
-_DOC_TOOLSET_VERSION = "multipurpose_v3"
+_DOC_TOOLSET_VERSION = "multipurpose_v4_cassation"
 _doc_graphs: dict[tuple[str, bool, str], object] = {}
 
 

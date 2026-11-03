@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     QDRANT_API_KEY: str | None = None
     QDRANT_VERIFY_SSL: bool = True  # set to false to skip TLS cert verification
     QDRANT_LEGAL_KNOWLEDGE_COLLECTION: str = "BerhanAIDocumentKnowledgeCited"
+    QDRANT_CASSATION_COLLECTION: str = "BerhanAICassationKnowledge"
     QDRANT_DEFAULT_COLLECTION: str = "doc_blocks"  # user-uploaded doc blocks
     KNOWLEDGE_EMBEDDING_DIMENSION: int = 1024
     QDRANT_CONTENT_PAYLOAD_KEY: str = "content"  # key in point payload for article text
@@ -38,6 +39,12 @@ class Settings(BaseSettings):
     # Chat-path legal retrieval: semantic pipeline (expand → RRF over-fetch → Cohere Rerank)
     RETRIEVAL_LEGAL_FETCH_K: int = 15      # candidates per sub-query fetched from Qdrant
     RETRIEVAL_LEGAL_RERANK_TOP_K: int = 12  # final results after Cohere cross-encoder rerank
+    # Cassation (ሰበር) tools: dense over-fetch → rerank → at most PER_CASE passages per case
+    RETRIEVAL_CASSATION_FETCH_K: int = 40
+    RETRIEVAL_CASSATION_MAX_CASES: int = 5
+    RETRIEVAL_CASSATION_PER_CASE: int = 2
+    RETRIEVAL_CASSATION_MIN_RERANK_SCORE: float = 0.05
+    RETRIEVAL_CASSATION_CASE_BODY_CHUNKS: int = 6
 
     # Compliance analysis
     COMPLIANCE_ANALYSIS_MODEL: str | None = None  # default: GEMINI_MODEL

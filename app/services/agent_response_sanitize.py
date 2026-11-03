@@ -14,9 +14,14 @@ _BLOCK_INLINE_RE = re.compile(
     r"\s*Block:\s*[A-Za-z0-9_\-]+(?:\s*,\s*[A-Za-z0-9_\-]+)*",
     re.IGNORECASE,
 )
-# Tool headers sometimes echoed: [Doc: … | Block: … | …]
+# Tool headers sometimes echoed: [Doc: … | Block: … | …], [Source: …], [Cassation: …]
 _DOC_HEADER_RE = re.compile(
-    r"\[(?:Doc|Document section)[^\]]*\]",
+    r"\[(?:Doc|Document section|Source:|Cassation:)[^\]]*\]",
+    re.IGNORECASE,
+)
+# Internal cassation document_id slugs (cite by ሰበር number instead)
+_CASSATION_SLUG_RE = re.compile(
+    r"\(?\s*\bcassation-(?:published|unpublished)-\d+-\d+\b\s*\)?",
     re.IGNORECASE,
 )
 _BLOCK_ID_EQ_RE = re.compile(
@@ -34,6 +39,8 @@ _HOLD_PREFIXES = (
     "[Doc:",
     "[doc:",
     "[Document section",
+    "[Source:",
+    "[Cassation:",
 )
 
 
@@ -43,6 +50,7 @@ def sanitize_user_facing_agent_text(text: str) -> str:
         return text
     out = _BLOCK_PAREN_RE.sub("", text)
     out = _DOC_HEADER_RE.sub("", out)
+    out = _CASSATION_SLUG_RE.sub("", out)
     out = _BLOCK_ID_EQ_RE.sub("", out)
     out = _BLOCK_INLINE_RE.sub("", out)
     out = re.sub(r"[ \t]{2,}", " ", out)

@@ -35,6 +35,10 @@ _PINPOINT_PAT = re.compile(
         | \bSection\s*\d+
         | \bRegulation\s+(?:No\.?\s*)?\d+
         | ደንብ\s*(?:ቁጥር\s*)?\d+
+        | ሰበር\s*(?:መዝገብ\s*)?(?:ቁጥር\s*)?\d+
+        | ሰ\s*/\s*መ\s*/\s*ቁ\.?\s*\d+
+        | \bCassation\s+(?:File\s+|Case\s+)?(?:No\.?\s*)?\d+
+        | \bCase\s+No\.?\s*\d+
     )
     """,
     re.VERBOSE | re.IGNORECASE,
@@ -119,6 +123,9 @@ _FAKE_BACKREF_PAT = re.compile(
 _SOURCE_HEADER_PAT = re.compile(
     r"\[Source:\s*(?P<doc>[^\|]+?)\s*\|\s*Article\s+(?P<item>[^\|\]]+?)\s*(?:\|[^\]]+)?\]"
 )
+_CASSATION_HEADER_PAT = re.compile(
+    r"\[Cassation:\s*(?P<doc>[^\|]+?)\s*\|\s*Case\s+(?P<item>[^\|\]]+?)\s*(?:\|[^\]]+)?\]"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -135,16 +142,17 @@ class GroundingResult:
 
 
 def extract_retrieved_item_ids(tool_messages: list[ToolMessage]) -> set[str]:
-    """Return the set of item_ids (article numbers) from all retrieved [Source: …] blocks."""
+    """Return article numbers ([Source: …]) and case numbers ([Cassation: …]) retrieved."""
     ids: set[str] = set()
     for tm in tool_messages:
         content = tm.content or ""
         if not isinstance(content, str):
             continue
-        for m in _SOURCE_HEADER_PAT.finditer(content):
-            item = m.group("item").strip()
-            if item:
-                ids.add(item)
+        for pat in (_SOURCE_HEADER_PAT, _CASSATION_HEADER_PAT):
+            for m in pat.finditer(content):
+                item = m.group("item").strip()
+                if item:
+                    ids.add(item)
     return ids
 
 
@@ -207,9 +215,10 @@ def _is_amharic_heavy(text: str) -> bool:
 
 _REPAIR_MSG_EN = (
     "Your previous answer made legal claims without specific article numbers. "
-    "Please call search_legal_knowledge again now and rewrite the answer. "
+    "Please call search_legal_knowledge (statutes) and/or search_cassation_decisions "
+    "(case law) again now and rewrite the answer. "
     "Every legal statement must include a pinpoint citation "
-    "(e.g. 'Under Article N of Proclamation No. …' or 'አንቀጽ N…'). "
+    "(e.g. 'Under Article N of Proclamation No. …', 'አንቀጽ N…' or 'ሰበር መዝገብ ቁጥር N'). "
     "Only cite instruments that appear in the tool results you receive. "
     "If the question concerns a company, director, board, or shareholders, "
     "cite the Commercial Code (Proclamation No. 1243/2021) as the primary source, "
@@ -220,9 +229,10 @@ _REPAIR_MSG_EN = (
 
 _REPAIR_MSG_AM = (
     "የቀደመው መልስ ህጋዊ ድምዳሜ አካቷል ነገር ግን ልዩ የአንቀጽ ቁጥሮች አልነበሩም። "
-    "እባክዎ አሁን search_legal_knowledge ን ደውለው መልሱን እንደገና ይፃፉ። "
-    "ሁሉም ህጋዊ ሃሳቦች የሚጠቀሰውን አንቀጽ ቁጥር ማካተት አለባቸው "
-    "(ለምሳሌ 'አዋጅ ቁጥር … አንቀጽ N …' ወይም 'Under Article N of Proclamation No. …'). "
+    "እባክዎ አሁን search_legal_knowledge (ሕጎች) እና/ወይም search_cassation_decisions (የሰበር ውሳኔዎች) ን "
+    "ደውለው መልሱን እንደገና ይፃፉ። "
+    "ሁሉም ህጋዊ ሃሳቦች የሚጠቀሰውን አንቀጽ ወይም የሰበር መዝገብ ቁጥር ማካተት አለባቸው "
+    "(ለምሳሌ 'አዋጅ ቁጥር … አንቀጽ N …' ወይም 'ሰበር መዝገብ ቁጥር N'). "
     "ጥያቄው ኩባንያ፣ ዳይሬክተር ወይም አክሲዮን ካካተተ፣ "
     "የንግድ ሕግ (አዋጅ ቁጥር 1243/2021) ዋና ምንጭ ያድርጉ — የፍትሐብሔር ሕጉን ሳይሆን። "
     "የህጉ ዳታቤዝ ተገቢ ድንጋጌ ካላቀረበ ያሉትን ምንጮች ጠቅሰው ያሳውቁ — "

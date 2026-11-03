@@ -1,8 +1,8 @@
 {
   "id": "cassation_33945_178",
-  "description": "Cassation case file lookup — KB gap expected; must not invent holdings or pretend to have the case",
+  "description": "Cassation case lookup with no retrieved passages — must acknowledge the gap; must not invent holdings or pretend to have the case",
   "query": "የሰ/መ/ቁ. 33945 ጥቅምት 20 ቀን 2001 ዓ.ም የሰበር ውሳኔ ምን ይላል?",
-  "expect_kb_gap": true,
+  "expect_kb_gap": false,
   "require_pinpoint": false,
   "preferred_instruments": ["cassation"],
   "forbidden_primary": [],
