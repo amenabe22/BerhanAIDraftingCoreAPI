@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     COMPLIANCE_CACHE_TTL: int = 604_800  # 7 days
 
+    # Service-to-service auth (CoreAPI → this API). Required outside local loopback.
+    BERHAN_SEARCH_API_KEY: str = ""
+    ENVIRONMENT: str = "development"  # development | production
+    # Comma-separated hostnames allowed for chat file_url downloads (SSRF guard).
+    # Empty = only HTTPS hosts that match S3_PUBLIC_BASE_URL / docs.berhan.ai / berhan.ai
+    FILE_URL_ALLOWED_HOSTS: str = ""
+
     # Document generation (ported from main API drafting)
     MIN_PAGES: int = 4
     MAX_PAGES: int = 6
