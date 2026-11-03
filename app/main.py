@@ -1,12 +1,13 @@
 import asyncio
 import json
 import uuid
+from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel
 
@@ -14,6 +15,8 @@ from app.api.v1.endpoints.drafting.compliance import router as compliance_router
 from app.api.v1.endpoints.drafting.edit import router as edit_router
 from app.api.v1.endpoints.drafting.export import router as export_router
 from app.api.v1.endpoints.drafting.generate import router as generate_router
+from app.auth import ServiceAuthMiddleware
+from app.config import settings
 from app.graph import (
     DOC_CONSULTANT_SYSTEM,
     LEGAL_ADVISOR_SYSTEM,
@@ -27,6 +30,24 @@ from app.services.chat_attachments import resolve_human_message_content
 
 setup_logging()
 log = get_logger("chat")
+
+_IS_PROD = (getattr(settings, "ENVIRONMENT", "") or "").lower() in {
+    "production",
+    "prod",
+}
+
+_TEST_CLIENT_PATH = Path(__file__).resolve().parent.parent / "test_client.html"
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    if _IS_PROD and not (getattr(settings, "BERHAN_SEARCH_API_KEY", None) or "").strip():
+        raise RuntimeError("BERHAN_SEARCH_API_KEY is required in production")
+    yield
+
+
+def _service_unavailable_http() -> HTTPException:
+    return HTTPException(status_code=503, detail="Service temporarily unavailable")
 
 
 class Language(str, Enum):
@@ -60,8 +81,20 @@ _LANG_DEFAULT_INSTRUCTION = (
     "If they wrote in Afaan Oromo, answer in Afaan Oromo only."
 )
 
+_LANG_DOC_SCOPE_NOTE = (
+    "LANGUAGE above controls your *chat replies* only. "
+    "Never translate, rewrite, or change the open document's wording or governing-language "
+    "clause just because the UI/chat language differs from the document. "
+    "Only mutate the document when the user clearly asks for a text change."
+)
 
-def _apply_language(system_prompt: str, language: Language | None) -> str:
+
+def _apply_language(
+    system_prompt: str,
+    language: Language | None,
+    *,
+    document_scope: bool = False,
+) -> str:
     instruction = (
         _LANG_INSTRUCTION.get(language, _LANG_DEFAULT_INSTRUCTION)
         if language
@@ -69,7 +102,10 @@ def _apply_language(system_prompt: str, language: Language | None) -> str:
     )
     # Language instruction goes at the TOP so the LLM sees it first,
     # without disrupting the tool-call directives that follow.
-    return f"LANGUAGE: {instruction}\n\n{system_prompt}"
+    prefix = f"LANGUAGE: {instruction}"
+    if document_scope:
+        prefix = f"{prefix}\n{_LANG_DOC_SCOPE_NOTE}"
+    return f"{prefix}\n\n{system_prompt}"
 
 
 class ChatRequest(BaseModel):
@@ -96,48 +132,60 @@ class DocChatRequest(BaseModel):
     document_language: str | None = None
 
 
-app = FastAPI(title="Berhan Advisor Knowledge Agent")
+app = FastAPI(
+    title="Berhan Advisor Knowledge Agent",
+    docs_url=None if _IS_PROD else "/docs",
+    redoc_url=None if _IS_PROD else "/redoc",
+    openapi_url=None if _IS_PROD else "/openapi.json",
+    lifespan=_lifespan,
+)
+
+_cors_origins = ["https://docs.berhan.ai", "https://berhan.ai", "https://www.berhan.ai"]
+if not _IS_PROD:
+    _cors_origins.extend(["http://localhost:3000", "http://127.0.0.1:3000"])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://docs.berhan.ai",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "Accept", "Origin"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Origin",
+        "X-Berhan-Service-Key",
+    ],
     max_age=86400,
 )
+app.add_middleware(ServiceAuthMiddleware)
 
 app.include_router(compliance_router, prefix="/drafting")
 app.include_router(edit_router, prefix="/drafting")
 app.include_router(generate_router, prefix="/drafting")
 app.include_router(export_router, prefix="/drafting")
 
-_TEST_CLIENT_PATH = Path(__file__).resolve().parent.parent / "test_client.html"
-
 
 @app.get("/")
 async def root():
-    if _TEST_CLIENT_PATH.exists():
-        return FileResponse(_TEST_CLIENT_PATH)
+    if not _IS_PROD and _TEST_CLIENT_PATH.is_file():
+        return HTMLResponse(_TEST_CLIENT_PATH.read_text(encoding="utf-8"))
     return {
-        "message": "Berhan Advisor API",
-        "docs": "/docs",
-        "health": "/health",
-        "legal_search_stream": "/legal-search/stream",
-        "legal_agent_stream": "/legal-agent/stream",
-        "doc_agent_stream": "/doc-agent/stream",
-        "compliance_analyze": "/drafting/compliance/analyze",
-        "compliance_analyze_stream": "/drafting/compliance/analyze-stream",
-        "semantic_edit": "/drafting/edit",
+        "status": "ok",
+        "service": "berhan-search-api",
+        "legal_search_stream": "POST /legal-search/stream",
+        "legal_agent_stream": "POST /legal-agent/stream",
+        "compliance_analyze_stream": "POST /drafting/compliance/analyze/stream",
     }
 
 
 @app.get("/health")
 async def health():
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
     return {"status": "ok"}
 
 
@@ -212,15 +260,9 @@ def _is_new_thread(graph, thread_id: str) -> bool:
 
 
 def _user_facing_stream_error(message: str) -> str:
-    lower = (message or "").strip().lower()
-    if "json error injected into sse stream" in lower:
-        return "The AI service had a temporary connection issue. Please try again."
-    if "unsupported image format" in lower or "supported formats: png" in lower:
-        return (
-            "That attachment could not be read as an image. "
-            "For contracts, upload PDF or DOCX (or paste the text) and try again."
-        )
-    return message or "Upstream error"
+    from app.services.generation.error_utils import sanitize_error_message
+
+    return sanitize_error_message(message or "")
 
 
 async def _stream_endpoint(
@@ -240,7 +282,7 @@ async def _stream_endpoint(
         event_type,
         extra={
             "event": event_type,
-            "user_message": request.message,
+            "message_len": len(request.message or ""),
             "thread_id": thread_id,
             "has_file_url": bool(file_url),
             "model": resolved_model,
@@ -454,8 +496,8 @@ async def legal_search_stream(request: ChatRequest):
     """Streaming legal search: conversational answer synthesized from retrieved sources, with citations at the end."""
     try:
         graph = get_graph()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception:
+        raise _service_unavailable_http() from None
 
     return await _stream_endpoint(
         request,
@@ -470,8 +512,8 @@ async def legal_agent_stream(request: ChatRequest):
     """Streaming legal consultant: advisory answers with citations at the end."""
     try:
         graph = get_graph()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception:
+        raise _service_unavailable_http() from None
 
     return await _stream_endpoint(
         request,
@@ -492,34 +534,47 @@ async def doc_agent_stream(request: DocChatRequest):
     enable_edit = isinstance(request.doc_json, dict) and request.doc_json.get("type") == "doc"
     try:
         graph = get_doc_graph(request.doc_id, enable_edit=enable_edit)
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception:
+        raise _service_unavailable_http() from None
 
+    # Never fall back UI/chat language → document_language (that caused Amharic UI
+    # sessions to rewrite English contracts when the user only asked a question).
     doc_lang = request.document_language
-    if not doc_lang and request.language:
-        doc_lang = (
-            request.language.value if hasattr(request.language, "value") else str(request.language)
-        )
 
     message = request.message
     if enable_edit:
-        from app.services.drafting.editing.financial_figures import (
-            augment_message_with_financial_figures,
-        )
+        try:
+            from app.services.drafting.editing.live_document import (
+                augment_message_with_live_document,
+            )
 
-        message = augment_message_with_financial_figures(message, request.doc_json)
+            message = augment_message_with_live_document(message, request.doc_json)
+        except Exception:
+            log.exception("live_document augment skipped")
+        try:
+            from app.services.drafting.editing.financial_figures import (
+                augment_message_with_financial_figures,
+            )
+
+            message = augment_message_with_financial_figures(message, request.doc_json)
+        except Exception:
+            # Optional grounding helper — never fail the whole consult turn.
+            log.exception("financial_figures augment skipped")
 
     return await _stream_endpoint(
         ChatRequest(
             message=message, thread_id=request.thread_id, language=request.language
         ),
         event_type="doc_agent_request",
-        system_prompt=_apply_language(DOC_CONSULTANT_SYSTEM, request.language),
+        system_prompt=_apply_language(
+            DOC_CONSULTANT_SYSTEM, request.language, document_scope=True
+        ),
         graph=graph,
         status_message="Searching documents and legal knowledge base…",
         extra_configurable={
             "doc_id": request.doc_id,
             "doc_json": request.doc_json if enable_edit else None,
             "document_language": doc_lang,
+            "user_message": request.message,
         },
     )
