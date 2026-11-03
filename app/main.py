@@ -18,6 +18,7 @@ from app.api.v1.endpoints.drafting.generate import router as generate_router
 from app.auth import ServiceAuthMiddleware
 from app.config import settings
 from app.graph import (
+    DOC_CONSULT_ONLY_SYSTEM,
     DOC_CONSULTANT_SYSTEM,
     LEGAL_ADVISOR_SYSTEM,
     LEGAL_AGENT_SYSTEM,
@@ -592,13 +593,14 @@ async def doc_agent_stream(request: DocChatRequest):
             # Optional grounding helper — never fail the whole consult turn.
             log.exception("financial_figures augment skipped")
 
+    doc_system = DOC_CONSULTANT_SYSTEM if enable_edit else DOC_CONSULT_ONLY_SYSTEM
     return await _stream_endpoint(
         ChatRequest(
             message=message, thread_id=request.thread_id, language=request.language
         ),
         event_type="doc_agent_request",
         system_prompt=_apply_language(
-            DOC_CONSULTANT_SYSTEM, request.language, document_scope=True
+            doc_system, request.language, document_scope=True
         ),
         graph=graph,
         status_message="Searching documents and legal knowledge base…",
