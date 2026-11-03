@@ -170,7 +170,11 @@ def _chunk_index(doc: Document) -> int:
 
 
 def get_cassation_case(case_number: str, focus: str = "") -> list[Document]:
-    """Headnote + holding + the body passages most relevant to *focus* (or to the holding)."""
+    """Headnote + holding + the body passages closest to this case's own summary and *focus*.
+
+    Body passages are ranked against the headnote/holding as well as the focus because
+    some ingested cases carry neighbouring decisions from the same volume in their body.
+    """
     match = _CASE_NUMBER_RE.search(case_number or "")
     if not match:
         return []
@@ -179,7 +183,8 @@ def get_cassation_case(case_number: str, focus: str = "") -> list[Document]:
         return []
     summary = [d for d in docs if _section(d.metadata) in ("headnote", "holding")]
     body = [d for d in docs if _section(d.metadata) not in ("headnote", "holding")]
-    anchor = (focus or "").strip() or "\n".join(d.page_content for d in summary)[:2000]
+    summary_text = "\n".join(d.page_content for d in summary)[:1500]
+    anchor = "\n".join(part for part in (summary_text, (focus or "").strip()) if part)
     if anchor and len(body) > settings.RETRIEVAL_CASSATION_CASE_BODY_CHUNKS:
         body = _rerank(anchor, body, settings.RETRIEVAL_CASSATION_CASE_BODY_CHUNKS)
     else:
