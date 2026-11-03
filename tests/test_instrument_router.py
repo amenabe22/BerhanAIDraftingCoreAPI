@@ -66,17 +66,19 @@ class TestInheritanceRouting:
 
 
 class TestCassationRouting:
+    """Cassation decisions are indexed, so case-law queries must not presume a KB gap."""
+
     def test_cassation_english(self):
         d = route("Can I get the cassation ruling on this?")
-        assert d.expect_kb_gap is True
+        assert d.expect_kb_gap is False
 
     def test_cassation_amharic(self):
         d = route("ሰ/መ/ቁ. 33945 ውሳኔ")
-        assert d.expect_kb_gap is True
+        assert d.expect_kb_gap is False
 
     def test_seber_amharic(self):
         d = route("ሰበር ሰሚ ችሎት ውሳኔ")
-        assert d.expect_kb_gap is True
+        assert d.expect_kb_gap is False
 
 
 class TestFISRouting:

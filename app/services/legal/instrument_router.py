@@ -128,7 +128,7 @@ _RULES: list[tuple[list[str], str, bool, list[str]]] = [
         False,
         [],
     ),
-    # Cassation / case law — always expect KB gap
+    # Cassation / case law — indexed separately and served by the cassation tools
     (
         [
             r"(?i)\bcassation\b",
@@ -138,7 +138,7 @@ _RULES: list[tuple[list[str], str, bool, list[str]]] = [
             r"ሰበር|ሰ/መ/ቁ|ሰ\.?መ\.?ቁ|ሰ\.?መ\b",
         ],
         "cassation Federal Supreme Court ruling decision volume",
-        True,  # expect KB gap
+        False,
         [],
     ),
     # Constitution / human rights

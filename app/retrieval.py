@@ -351,14 +351,12 @@ def get_retriever_tool():
         retriever,
         name="search_legal_knowledge",
         description=(
-            "Search the Ethiopian legal knowledge base for relevant articles, provisions, and "
-            "legal content. ALWAYS call this tool before making any legal statement or conclusion. "
-            "Use for ANY legal question — contracts, obligations, property, family law, "
-            "inheritance, employment, criminal procedure, business / commercial law, "
-            "constitutional rights, tax, and all other areas of Ethiopian law. "
-            "On follow-up turns that extend or add legal claims, call this tool again. "
-            "Returns document_id (source/instrument name), item_id (article number), "
-            "title, and article content — cite these in your answer."
+            "Search Ethiopian statutes: codes, proclamations, regulations and the Constitution. "
+            "Call before stating what the written law provides — contracts, obligations, property, "
+            "family, inheritance, employment, procedure, commercial, constitutional, tax and all "
+            "other areas. Court decisions are NOT in this index; use search_cassation_decisions / "
+            "get_cassation_case for case law. On follow-up turns that add legal claims, call again. "
+            "Returns document_id (instrument), item_id (article number), title and article text."
         ),
         document_prompt=document_prompt,
     )

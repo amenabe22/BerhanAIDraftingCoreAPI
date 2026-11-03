@@ -171,13 +171,13 @@ def test_commercial_director_forbidden_primary() -> None:
     )
 
 
-def test_cassation_expect_kb_gap() -> None:
-    """Cassation query must set expect_kb_gap=True in route decision."""
+def test_cassation_not_presumed_kb_gap() -> None:
+    """Cassation is indexed (cassation tools), so a case query must not presume a KB gap."""
     case_path = CASES_DIR / "cassation_33945_178.json"
     case = json.loads(case_path.read_text(encoding="utf-8"))
     decision = route(case["query"])
-    assert decision.expect_kb_gap is True, (
-        f"Expected expect_kb_gap=True for cassation query {case['query']!r}"
+    assert decision.expect_kb_gap is False, (
+        f"Expected expect_kb_gap=False for cassation query {case['query']!r}"
     )
 
 
