@@ -43,7 +43,13 @@ _TEST_CLIENT_PATH = Path(__file__).resolve().parent.parent / "test_client.html"
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    if _IS_PROD and not (getattr(settings, "BERHAN_SEARCH_API_KEY", None) or "").strip():
+    import os
+
+    key = (
+        (os.getenv("BERHAN_SEARCH_API_KEY") or "").strip()
+        or (getattr(settings, "BERHAN_SEARCH_API_KEY", None) or "").strip()
+    )
+    if _IS_PROD and not key:
         raise RuntimeError("BERHAN_SEARCH_API_KEY is required in production")
     yield
 
