@@ -26,6 +26,7 @@ from app.graph import (
 )
 from app.llm import SupportedModel, resolve_model
 from app.logging_config import get_logger, setup_logging
+from app.services.agent_response_sanitize import StreamBlockIdSanitizer
 from app.services.chat_attachments import resolve_human_message_content
 
 setup_logging()
@@ -192,9 +193,10 @@ async def ready():
 def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
     """Extract unique citations from all ToolMessages produced during the run.
 
-    Handles two header formats:
+    Handles header formats:
       [Source: <document_id> | Article <item_id> | <title>]  – legal knowledge
-      [Doc: <doc_id> | Block: <block_id> | Type: <type>]     – user doc blocks
+      [Document section … | <type>]                         – user doc excerpts
+      [Doc: <doc_id> | Block: <block_id> | …]               – legacy tool headers
     """
     seen: set[str] = set()
     citations: list[dict] = []
@@ -205,7 +207,7 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
         for block in content.split("\n\n"):
             block = block.strip()
             is_source = block.startswith("[Source:")
-            is_doc = block.startswith("[Doc:")
+            is_doc = block.startswith("[Doc:") or block.startswith("[Document section")
             if not is_source and not is_doc:
                 continue
             header_end = block.find("]")
@@ -231,7 +233,7 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
                         "content": text_body[:300],
                     }
                 )
-            else:  # [Doc: ...]
+            elif block.startswith("[Doc:"):
                 doc_id = parts[0].replace("Doc:", "").strip() if parts else ""
                 block_id = parts[1].replace("Block:", "").strip() if len(parts) > 1 else ""
                 block_type = parts[2].replace("Type:", "").strip() if len(parts) > 2 else ""
@@ -243,6 +245,21 @@ def _parse_citations(tool_messages: list[ToolMessage]) -> list[dict]:
                     {
                         "doc_id": doc_id,
                         "block_id": block_id,
+                        "type": block_type,
+                        "content": text_body[:300],
+                    }
+                )
+            else:
+                # [Document section…] — cite by snippet only (no internal ids)
+                label = parts[0].replace("Document section", "").strip() if parts else ""
+                block_type = parts[1].strip() if len(parts) > 1 else ""
+                key = f"docsec:{label}:{text_body[:80]}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                citations.append(
+                    {
+                        "title": label or "Document section",
                         "type": block_type,
                         "content": text_body[:300],
                     }
@@ -321,10 +338,17 @@ async def _stream_endpoint(
         status_sent = False
         saw_custom_tokens = False
         fallback_token_chunks: list[str] = []
+        token_sanitizer = StreamBlockIdSanitizer()
         # Capture the last grounding event emitted by the ground node (if any)
         last_grounding_event: dict | None = None
         loop = asyncio.get_running_loop()
         stream_q: asyncio.Queue[tuple[str, object] | None] = asyncio.Queue()
+
+        def _emit_sanitized_token(raw: str):
+            cleaned = token_sanitizer.feed(raw)
+            if cleaned:
+                return f"data: {json.dumps({'type': 'token', 'content': cleaned})}\n\n"
+            return None
 
         def run_graph_stream() -> None:
             try:
@@ -358,7 +382,9 @@ async def _stream_endpoint(
                             content = payload.get("content", "")
                             if content:
                                 saw_custom_tokens = True
-                                yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                                line = _emit_sanitized_token(content)
+                                if line:
+                                    yield line
                         elif ptype == "thinking":
                             # Reasoning/thinking tokens from extended-reasoning models.
                             # Forwarded as-is so the client can populate the thinking panel.
@@ -468,7 +494,12 @@ async def _stream_endpoint(
         ]
         if not saw_custom_tokens:
             for content in fallback_token_chunks:
-                yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                line = _emit_sanitized_token(content)
+                if line:
+                    yield line
+        flushed = token_sanitizer.flush()
+        if flushed:
+            yield f"data: {json.dumps({'type': 'token', 'content': flushed})}\n\n"
 
         # Existing citations event — unchanged
         citations = _parse_citations(collected)
