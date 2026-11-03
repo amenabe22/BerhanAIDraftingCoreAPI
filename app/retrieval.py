@@ -396,8 +396,9 @@ def get_doc_blocks_retriever_tool(doc_id: str):
         search_kwargs={"k": settings.RETRIEVAL_DOC_TOP_K, "filter": doc_filter}
     )
     retriever = _LoggingRetriever(retriever=inner)
+    # Human labels only — never put UUID block_ids in tool text (models echo them).
     document_prompt = PromptTemplate.from_template(
-        "[Doc: {doc_id} | Block: {block_id}{section_id} | {section_title}{type}{section_type}]\n{page_content}"
+        "[Document section{section_title} | {type}{section_type}]\n{page_content}"
     )
     return create_retriever_tool(
         retriever,
@@ -409,7 +410,7 @@ def get_doc_blocks_retriever_tool(doc_id: str):
             "as well as specific questions about parties, dates, obligations, terms, conditions, penalties, "
             "scope, purpose, rights, warranties, or any other document content. "
             "When the user's intent is unclear, default to calling this tool before asking for clarification. "
-            "Returns doc_id, block_id, block type, and the text content."
+            "Returns section labels and the text content (cite by heading/clause, never by internal ids)."
         ),
         document_prompt=document_prompt,
     )

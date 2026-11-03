@@ -153,7 +153,7 @@ def format_financial_figures_for_tool(
         section = h.get("section") or "(no heading)"
         lines.append(
             f"{i}. amount={h.get('amount')!r} section={section!r} "
-            f"block_id={h.get('block_id')} snippet={h.get('snippet')!r}"
+            f"snippet={h.get('snippet')!r}"
         )
     if factor is not None:
         pct = int(round(factor * 100))
